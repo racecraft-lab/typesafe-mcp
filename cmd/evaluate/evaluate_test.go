@@ -42,7 +42,7 @@ func TestEvaluate(t *testing.T) {
 		w.Write([]byte(`{"model":"` + in.Model + `","answers":{"q":{"type":"noul","noul":0.9}}}`))
 	}))
 	defer srv.Close()
-	c := &Client{URL: srv.URL + "/v1/systemone", APIKey: "k", HTTP: srv.Client()}
+	c := testClient(providerAt("typesafe", srv.URL+"/v1/systemone"), srv)
 	req := evaluateIn{Model: "jev-latest", Questions: map[string]question{"q": {Type: "noul", Instructions: "urgent?"}}}
 
 	req.State = "busy"
@@ -51,9 +51,19 @@ func TestEvaluate(t *testing.T) {
 		t.Fatalf("retry: calls=%d b=%s err=%v", calls, b, err)
 	}
 
+	// A rejected request reports the status and a remedy, but not the
+	// provider's own error text. Upstream echoed the body; that text can quote
+	// the submitted state back, and an error travels further than the input did.
 	req.State = "bad"
-	if _, err := c.Evaluate(context.Background(), req); err == nil || !strings.Contains(err.Error(), "criteria required") {
-		t.Fatalf("422: err=%v", err)
+	_, err = c.Evaluate(context.Background(), req)
+	if err == nil {
+		t.Fatal("422: want an error")
+	}
+	if !strings.Contains(err.Error(), "HTTP 422") {
+		t.Errorf("422: error should name the status: %v", err)
+	}
+	if strings.Contains(err.Error(), "criteria required") {
+		t.Errorf("422: error echoed the provider's body: %v", err)
 	}
 }
 
@@ -65,7 +75,7 @@ func TestEvaluatePostsToURL(t *testing.T) {
 		w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
-	c := &Client{URL: srv.URL + "/api/alpha/decisions", APIKey: "k", HTTP: srv.Client()}
+	c := testClient(providerAt("openrouter", srv.URL+"/api/alpha/decisions"), srv)
 	if _, err := c.Evaluate(context.Background(), evaluateIn{State: "x"}); err != nil {
 		t.Fatal(err)
 	}
@@ -74,31 +84,9 @@ func TestEvaluatePostsToURL(t *testing.T) {
 	}
 }
 
-func TestRoute(t *testing.T) {
-	for _, tc := range []struct{ typesafe, openrouter, url, model, key string }{
-		{"t", "", "https://api.typesafe.ai/v1/systemone", "jev-latest", "t"},
-		{"", "o", "https://openrouter.ai/api/alpha/decisions", "~typesafe/jev-latest", "o"},
-		// TypeSafe wins so a stray OpenRouter key cannot reroute an existing setup.
-		{"t", "o", "https://api.typesafe.ai/v1/systemone", "jev-latest", "t"},
-	} {
-		t.Setenv("TYPESAFE_API_KEY", tc.typesafe)
-		t.Setenv("OPENROUTER_API_KEY", tc.openrouter)
-		c, err := route()
-		if err != nil {
-			t.Fatalf("%+v: %v", tc, err)
-		}
-		// APIKey too: each route must send the key that selected it.
-		if c.URL != tc.url || c.Model != tc.model || c.APIKey != tc.key {
-			t.Errorf("%+v: got %s %s %s", tc, c.URL, c.Model, c.APIKey)
-		}
-	}
-
-	t.Setenv("TYPESAFE_API_KEY", "")
-	t.Setenv("OPENROUTER_API_KEY", "")
-	if _, err := route(); err == nil {
-		t.Fatal("no keys: want error")
-	}
-}
+// The endpoint selection that TestRoute used to cover now lives in
+// config_test.go, where selection is explicit rather than inferred from which
+// keys happen to be set.
 
 func TestSetupEnv(t *testing.T) {
 	got := setupEnv([]string{

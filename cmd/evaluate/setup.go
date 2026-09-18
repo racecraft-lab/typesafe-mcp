@@ -34,7 +34,7 @@ func evaluateBinary() (string, error) {
 // OPENROUTER_API_KEY from the current environment: clients launch the server
 // without the user's shell env.
 func runMCPSetup(ctx context.Context) error {
-	if _, err := route(); err != nil {
+	if _, err := resolveConfig(os.LookupEnv); err != nil {
 		return err
 	}
 	exe, err := evaluateBinary()
@@ -287,7 +287,9 @@ func runPiSetup() error {
 	fmt.Println("Run /reload in pi, or restart it, to load the evaluate extension.")
 	// Unlike the MCP clients, nothing is baked in: the extension reads the key
 	// from the shell pi runs in, so a missing one is a hint, not a failure.
-	if _, err := route(); err != nil {
+	if cfg, err := resolveConfig(os.LookupEnv); err != nil {
+		fmt.Printf("\nNote: %v\n", err)
+	} else if _, err := loadCredential(cfg); err != nil {
 		fmt.Printf("\nNote: %v\n", err)
 	}
 	return nil

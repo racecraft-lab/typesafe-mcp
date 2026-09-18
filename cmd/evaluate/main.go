@@ -3,9 +3,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -96,37 +94,51 @@ func newRootCmd() *cobra.Command {
 	return root
 }
 
-// route picks the evaluation endpoint from the environment: the TypeSafe API
-// when TYPESAFE_API_KEY is set, otherwise OpenRouter's Decisions router.
-// TypeSafe wins when both are set, so an OPENROUTER_API_KEY left in the shell
-// by another tool cannot silently reroute and re-bill an existing setup.
-func route() (*Client, error) {
-	switch {
-	case os.Getenv("TYPESAFE_API_KEY") != "":
-		return &Client{
-			URL:    "https://api.typesafe.ai/v1/systemone",
-			APIKey: os.Getenv("TYPESAFE_API_KEY"),
-			Model:  "jev-latest",
-		}, nil
-	case os.Getenv("OPENROUTER_API_KEY") != "":
-		return &Client{
-			// ponytail: /api/alpha/ is OpenRouter's alpha path and may move.
-			URL:    "https://openrouter.ai/api/alpha/decisions",
-			APIKey: os.Getenv("OPENROUTER_API_KEY"),
-			Model:  "~typesafe/jev-latest",
-		}, nil
+// newClient builds the HTTP client for cfg. The credential is loaded here and
+// nowhere else, so there is exactly one place a key enters the process.
+//
+// Unlike the version this fork was taken from, the backend comes from
+// JEV_PROVIDER rather than from whichever API key happens to be set. Which
+// credentials are lying around in a shell should not decide where state is
+// sent, or which account pays for it. See docs/upstream-baseline.md.
+func newClient(cfg Config) (*Client, error) {
+	key, err := loadCredential(cfg)
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.New("set TYPESAFE_API_KEY (https://console.typesafe.ai/) or OPENROUTER_API_KEY (https://openrouter.ai/keys)")
+	return &Client{
+		Provider:   cfg.Provider,
+		Model:      cfg.Model,
+		APIKey:     key,
+		Timeout:    cfg.Timeout,
+		MaxRetries: cfg.MaxRetries,
+		HTTP:       newHTTPClient(),
+		Backoff:    time.Second,
+	}, nil
+}
+
+// newServer registers the tools for cfg's backend against c. Split out from
+// serve so a test can drive the real registration without a transport or a
+// provider.
+func newServer(cfg Config, c *Client) *mcp.Server {
+	s := mcp.NewServer(
+		&mcp.Implementation{Name: "evaluate", Version: version},
+		&mcp.ServerOptions{Instructions: instructions},
+	)
+	registerTools(s, cfg, c)
+	return s
 }
 
 func serve(ctx context.Context) error {
-	c, err := route()
+	cfg, err := resolveConfig(os.LookupEnv)
 	if err != nil {
 		return err
 	}
-	c.HTTP = &http.Client{Timeout: 60 * time.Second}
-	c.Backoff = time.Second
-	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: version}, &mcp.ServerOptions{Instructions: instructions})
-	registerTools(s, c)
-	return s.Run(ctx, &mcp.StdioTransport{})
+	c, err := newClient(cfg)
+	if err != nil {
+		return err
+	}
+	// Nothing is printed here: stdout carries the MCP protocol, and a startup
+	// banner on it is a protocol error.
+	return newServer(cfg, c).Run(ctx, &mcp.StdioTransport{})
 }

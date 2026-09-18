@@ -31,28 +31,39 @@ type evaluateIn struct {
 	Model     string              `json:"model,omitempty" jsonschema:"model to use; defaults to the latest Jev on whichever endpoint is configured"`
 }
 
-func registerTools(s *mcp.Server, c *Client) {
-	add(s, &mcp.Tool{
-		Name: "evaluate",
-		Description: "Jev is a fast structured-decision model: unstructured state in, typed answers " +
-			"(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
-			"Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
-			"and map-reduce over large data — wherever hand-written logic is too brittle or latency matters. " +
-			"Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options).",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-	}, func(ctx context.Context, in evaluateIn) ([]byte, error) {
+func registerTools(s *mcp.Server, cfg Config, c *Client) {
+	add(s, evaluateTool(), func(ctx context.Context, in evaluateIn) ([]byte, error) {
 		if in.State == nil {
 			return nil, errors.New("state is required")
 		}
 		if len(in.Questions) == 0 {
 			return nil, errors.New("questions must not be empty")
 		}
+		// Precedence: the tool call's model, then JEV_MODEL, then the
+		// backend default. c.Model already holds the resolved second and
+		// third of those.
 		if in.Model == "" {
 			in.Model = c.Model
 		}
-		// ponytail: an explicit model passes through as given, so a TypeSafe
-		// name sent to OpenRouter (or the reverse) is a 404 the agent reads.
-		// Map slugs per route if that starts to bite.
+		// An explicit model passes through exactly as given. A "~typesafe/"
+		// prefix is neither added nor stripped: a mismatched id becomes a 404
+		// the agent can read, which beats a silent rewrite to a model nobody
+		// asked for.
+		_ = cfg
 		return c.Evaluate(ctx, in)
 	})
+}
+
+func evaluateTool() *mcp.Tool {
+	return &mcp.Tool{
+		Name: "evaluate",
+		Description: "Jev is a fast structured-decision model: unstructured state in, typed answers " +
+			"(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
+			"Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
+			"and map-reduce over large data — wherever hand-written logic is too brittle or latency matters. " +
+			"Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
+			"Calling this sends the supplied state and questions to an external provider and may incur charges; " +
+			"the read-only hint means it changes nothing locally, not that it is free or private.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+	}
 }
