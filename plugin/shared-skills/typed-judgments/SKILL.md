@@ -74,6 +74,7 @@ the whole site.
 | What to put in `state` and how to shape it | [State](https://docs.typesafe.ai/concepts/state.md) |
 | An answer whose confidence is low, or what to do about it | [Confidence](https://docs.typesafe.ai/confidence.md), [Confidence-gated routing](https://docs.typesafe.ai/patterns/confidence-routing.md) |
 | A judgment too big for one question | [Composite scoring](https://docs.typesafe.ai/patterns/composite-scoring.md), [Speculative fan-out](https://docs.typesafe.ai/patterns/fan-out.md) |
+| A large state, and whether accuracy holds | [Models](https://docs.typesafe.ai/models.md), [Jev 1.13 jaggedness](https://docs.typesafe.ai/model-jaggedness/jev-1.13.md) |
 | Anything else | the [documentation index](https://docs.typesafe.ai/llms.txt) |
 
 Two cautions specific to using the tool rather than writing code. The
@@ -91,6 +92,14 @@ inventing a detail that depends on a version you cannot see.
 **Batch.** Independent questions over the same state go in one call. They run
 in parallel and cannot see each other's answers. Eight questions cost barely
 more than one, so ask everything you want to know at once.
+
+**Mind the context budget.** The model takes about 64,000 tokens per request in
+total, and about 32,000 for the state plus the single longest question. The
+tool estimates both before sending and refuses a request that cannot fit,
+naming which budget was exceeded, so an oversized state costs nothing. Split
+the state or judge it in parts rather than trimming a question down to nothing.
+Accuracy also shifts as the state grows, which the jaggedness page above
+covers.
 
 **The id carries no meaning.** Question ids are never sent to the model.
 `"is_regression"` tells it nothing; the full sentence in `instructions` does.

@@ -31,6 +31,20 @@ const (
 	// OpenRouter backend, 255 options answered correctly and 256 came back as
 	// an HTTP 400 naming no field.
 	maxChoiceOptions = 255
+	// Jev's documented context budgets (https://docs.typesafe.ai/models.md):
+	// 64k tokens for the whole request, and 32k for the state plus the single
+	// longest question. Exceeding either is a billed round trip that comes
+	// back as a bare HTTP 400, whose text blames the question types.
+	maxRequestTokens = 64_000
+	maxStateTokens   = 32_000
+	// Tokens are estimated from serialised bytes because no tokenizer ships
+	// here and adding one for a guardrail would be a poor trade. Four bytes
+	// per token is the usual figure for English text; it UNDER-counts denser
+	// input such as CJK or code, so the estimate errs toward letting a
+	// borderline request through and leaving the provider to judge it. That
+	// is the safe direction: this check exists to turn an opaque 400 into a
+	// useful message, not to second-guess the backend.
+	bytesPerToken = 4
 )
 
 // validateRequest checks a call before it costs anything. The MCP schema
@@ -56,6 +70,46 @@ func validateRequest(spec ProviderSpec, in evaluateIn) error {
 		if err := validateQuestion(spec, id, in.Questions[id]); err != nil {
 			return err
 		}
+	}
+	return validateBudget(in.State, in.Questions)
+}
+
+// estimateTokens approximates the tokens a value costs once serialised.
+func estimateTokens(v any) int {
+	b, err := json.Marshal(v)
+	if err != nil {
+		// Unmarshalable input fails elsewhere with a better message; charging
+		// it nothing here keeps this from being the error the caller sees.
+		return 0
+	}
+	return len(b) / bytesPerToken
+}
+
+// validateBudget refuses a request that cannot fit Jev's context window.
+//
+// Both budgets are checked because they fail differently: the total covers the
+// state plus every question, while the second covers the state plus only the
+// longest single question, so a large state with many small questions can pass
+// one and fail the other.
+func validateBudget[Q any](state any, questions map[string]Q) error {
+	stateTokens := estimateTokens(state)
+
+	total, longest, longestID := stateTokens, 0, ""
+	for _, id := range sortedKeys(questions) {
+		n := estimateTokens(questions[id])
+		total += n
+		if n > longest {
+			longest, longestID = n, id
+		}
+	}
+
+	if total > maxRequestTokens {
+		return fmt.Errorf("the request is about %d tokens, over the %d the model accepts; send less state or fewer questions",
+			total, maxRequestTokens)
+	}
+	if stateTokens+longest > maxStateTokens {
+		return fmt.Errorf("state plus the longest question (questions.%s) is about %d tokens, over the %d the model accepts for the two together; send less state",
+			longestID, stateTokens+longest, maxStateTokens)
 	}
 	return nil
 }

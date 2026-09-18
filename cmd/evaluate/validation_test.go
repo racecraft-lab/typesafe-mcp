@@ -476,3 +476,78 @@ func TestChoiceOptionCap(t *testing.T) {
 		})
 	}
 }
+
+// Jev's context budgets are documented but were not checked, so an oversized
+// state was serialised, sent, billed, and returned as a bare HTTP 400 whose
+// text blames the question types. Found by smoke-testing the released plugin
+// with a 45,000-token state: exactly the failure the option cap fix was about.
+func TestContextBudget(t *testing.T) {
+	// Roughly n tokens of text, at the estimator's own ratio.
+	text := func(tokens int) string { return strings.Repeat("a", tokens*bytesPerToken) }
+	noul := func(instructions string) question {
+		return question{Type: typeNoul, Instructions: instructions}
+	}
+
+	t.Run("a state within both budgets passes", func(t *testing.T) {
+		err := validateBudget(text(1_000), map[string]question{"q": noul("short")})
+		if err != nil {
+			t.Errorf("a small request should pass: %v", err)
+		}
+	})
+
+	t.Run("a state over the state budget is refused", func(t *testing.T) {
+		err := validateBudget(text(maxStateTokens+5_000), map[string]question{"q": noul("short")})
+		if err == nil {
+			t.Fatal("an oversized state should be refused before the call is billed")
+		}
+		// The message must name the budget that was blown and the question
+		// that contributed, or the caller cannot tell what to shorten.
+		for _, want := range []string{"questions.q", "state"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not mention %q", err, want)
+			}
+		}
+	})
+
+	t.Run("many questions can exceed the total while each stays small", func(t *testing.T) {
+		questions := map[string]question{}
+		for i := range 40 {
+			questions[fmt.Sprintf("q%d", i)] = noul(text(2_000))
+		}
+		err := validateBudget(text(1_000), questions)
+		if err == nil {
+			t.Fatal("the total budget should be enforced, not only the state one")
+		}
+		if !strings.Contains(err.Error(), "fewer questions") {
+			t.Errorf("the total-budget error should suggest fewer questions: %v", err)
+		}
+	})
+
+	// The budget has to be reached through validateRequest, which is what the
+	// tool actually calls. Testing validateBudget alone passes even when the
+	// check is never wired in, which is how this was first written.
+	t.Run("validateRequest enforces it", func(t *testing.T) {
+		in := evaluateIn{
+			State: text(maxStateTokens + 5_000),
+			Questions: map[string]question{
+				"q": {Type: typeNoul, Instructions: "short"},
+			},
+		}
+		err := validateRequest(providers["openrouter"], in)
+		if err == nil {
+			t.Fatal("validateRequest let an oversized request through")
+		}
+		if !strings.Contains(err.Error(), "tokens") {
+			t.Errorf("error is not the budget one: %v", err)
+		}
+	})
+
+	// The estimate under-counts dense input rather than over-counting it, so a
+	// borderline request reaches the provider instead of being refused here on
+	// a guess. Being permissive at the edge is the point.
+	t.Run("the estimate does not over-count", func(t *testing.T) {
+		if got := estimateTokens(strings.Repeat("a", 4_000)); got > 1_100 {
+			t.Errorf("estimate %d is far above the ~1000 tokens 4000 ascii bytes cost", got)
+		}
+	})
+}
