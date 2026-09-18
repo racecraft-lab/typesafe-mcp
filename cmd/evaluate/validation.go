@@ -26,6 +26,11 @@ const (
 	// OpenRouter's schema sets no minItems, but a one-level scale gives the
 	// model nothing to place a value between.
 	minScoreLevels = 2
+	// maxChoiceOptions is a published limit, not this fork's policy: the tool
+	// description states at most 255 options. Probed 2026-09-18 against the
+	// OpenRouter backend, 255 options answered correctly and 256 came back as
+	// an HTTP 400 naming no field.
+	maxChoiceOptions = 255
 )
 
 // validateRequest checks a call before it costs anything. The MCP schema
@@ -184,6 +189,13 @@ func validateChoiceCriteria(spec ProviderSpec, path string, criteria any) error 
 	}
 	if len(m) == 0 {
 		return fmt.Errorf("%s.criteria must name at least one option", path)
+	}
+	// The answer space is enumerated in the request, and both backends cap it.
+	// Without this check the call is billed and comes back as a generic HTTP
+	// 400 naming no field, which is the one failure mode every other
+	// constraint here exists to avoid.
+	if len(m) > maxChoiceOptions {
+		return fmt.Errorf("%s.criteria names %d options, over the %d the backend accepts", path, len(m), maxChoiceOptions)
 	}
 	for _, option := range sortedKeys(m) {
 		if strings.TrimSpace(option) == "" {

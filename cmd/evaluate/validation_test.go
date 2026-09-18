@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -437,5 +438,41 @@ func TestResponseRequiresModelAndUsage(t *testing.T) {
 	full := `{"model":"m","usage":{"input_tokens":1,"output_tokens":1,"cost":0.1,"future":true},` + answer + `}`
 	if err := validateResponse(openrouterSpec, in, []byte(full)); err != nil {
 		t.Errorf("rejected a valid response with an extended usage block: %v", err)
+	}
+}
+
+// The answer space is capped, and the cap is enforced here rather than by the
+// provider. Probed against the OpenRouter backend on 2026-09-18: 255 options
+// answered correctly, 256 returned an HTTP 400 that named no field. Without
+// this check the operator pays for a round trip and gets back "the provider
+// rejected the request shape", which is exactly the outcome every other
+// constraint in this file exists to prevent.
+func TestChoiceOptionCap(t *testing.T) {
+	options := func(n int) map[string]any {
+		m := make(map[string]any, n)
+		for i := range n {
+			m[fmt.Sprintf("opt%d", i)] = "a description"
+		}
+		return m
+	}
+
+	for _, spec := range []ProviderSpec{providers["openrouter"], providers["typesafe"]} {
+		t.Run(spec.Name, func(t *testing.T) {
+			if err := validateChoiceCriteria(spec, "q", options(maxChoiceOptions)); err != nil {
+				t.Errorf("%d options should be accepted: %v", maxChoiceOptions, err)
+			}
+
+			err := validateChoiceCriteria(spec, "q", options(maxChoiceOptions+1))
+			if err == nil {
+				t.Fatalf("%d options should be refused before the call is billed", maxChoiceOptions+1)
+			}
+			// The message has to name the field and both numbers, or the
+			// caller cannot tell which question to trim.
+			for _, want := range []string{"q.criteria", "256", "255"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not mention %q", err, want)
+				}
+			}
+		})
 	}
 }
