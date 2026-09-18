@@ -9,3 +9,6 @@ bin/
 *.key
 *.bak
 .env.*
+
+# Local developer environment (direnv). Committing it is the operator's call.
+.envrc
