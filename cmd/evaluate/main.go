@@ -64,14 +64,7 @@ func newRootCmd() *cobra.Command {
 		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	setupCmd.AddCommand(
-		&cobra.Command{
-			Use:   "mcp",
-			Short: "Register with Claude Code, Claude Desktop, and Codex",
-			Args:  cobra.NoArgs,
-			RunE: func(cmd *cobra.Command, _ []string) error {
-				return runMCPSetup(cmd.Context())
-			},
-		},
+		newMCPSetupCmd(),
 		&cobra.Command{
 			Use:   "pi",
 			Short: "Install the evaluate extension for pi",
@@ -87,11 +80,48 @@ func newRootCmd() *cobra.Command {
 		&cobra.Command{Use: "update", Short: "Update evaluate to the latest release", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			return runUpdate(cmd.Context())
 		}},
-		&cobra.Command{Use: "version", Short: "Print the version", Args: cobra.NoArgs, Run: func(*cobra.Command, []string) {
-			fmt.Println(version)
-		}},
+		newVersionCmd(),
 	)
 	return root
+}
+
+func newVersionCmd() *cobra.Command {
+	var verbose bool
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print the version",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, _ []string) {
+			out := cmd.OutOrStdout()
+			if !verbose {
+				fmt.Fprintln(out, version)
+				return
+			}
+			// Which build this is and where it came from, so an operator can
+			// tell a Racecraft install from an upstream one without a network
+			// call or a credential.
+			fmt.Fprintln(out, "version:   ", version)
+			fmt.Fprintln(out, "repository:", githubRepo)
+			fmt.Fprintln(out, "commit:    ", buildCommit())
+		},
+	}
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "also print the source repository and build commit")
+	return cmd
+}
+
+// buildCommit reports the VCS revision stamped into the binary, or "unknown"
+// for a build made outside a repository.
+func buildCommit() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	for _, s := range info.Settings {
+		if s.Key == "vcs.revision" {
+			return s.Value
+		}
+	}
+	return "unknown"
 }
 
 // newClient builds the HTTP client for cfg. The credential is loaded here and

@@ -12,7 +12,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -84,79 +83,10 @@ func TestEvaluatePostsToURL(t *testing.T) {
 	}
 }
 
-// The endpoint selection that TestRoute used to cover now lives in
-// config_test.go, where selection is explicit rather than inferred from which
-// keys happen to be set.
-
-func TestSetupEnv(t *testing.T) {
-	got := setupEnv([]string{
-		"PATH=/bin", "TYPESAFE_API_KEY=k", "OPENROUTER_API_KEY_OTHER=no",
-		"TYPESAFE_OTHER=s", "OPENROUTER_BASE_URL=no", "OPENROUTER_API_KEY=o=o",
-	})
-	want := []string{"TYPESAFE_API_KEY=k", "TYPESAFE_OTHER=s", "OPENROUTER_API_KEY=o=o"}
-	if !slices.Equal(got, want) {
-		t.Fatalf("got %q\nwant %q", got, want)
-	}
-}
-
-func TestSetupCommands(t *testing.T) {
-	cmds := setupCommands("/bin/evaluate", []string{"TYPESAFE_API_KEY=k", "OPENROUTER_API_KEY=o"})
-	want := [][]string{
-		{"mcp", "remove", "evaluate", "-s", "user"},
-		{"mcp", "add", "evaluate", "-s", "user", "-e", "TYPESAFE_API_KEY=k", "-e", "OPENROUTER_API_KEY=o", "--", "/bin/evaluate", "mcp"},
-		{"mcp", "remove", "jev", "-s", "user"},
-		nil,
-		{"mcp", "add", "evaluate", "--env", "TYPESAFE_API_KEY=k", "--env", "OPENROUTER_API_KEY=o", "--", "/bin/evaluate", "mcp"},
-		{"mcp", "remove", "jev"},
-	}
-	got := [][]string{cmds[0].reset, cmds[0].add, cmds[0].legacy, cmds[1].reset, cmds[1].add, cmds[1].legacy}
-	if !slices.EqualFunc(got, want, slices.Equal) {
-		t.Fatalf("got %q\nwant %q", got, want)
-	}
-}
-
-func TestSetupClaudeDesktop(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "claude_desktop_config.json")
-	seed := `{"mcpServers":{"lumi":{"command":"/bin/lumi"},"evaluate":{"command":"/old"},"jev":{"command":"/gone"}},"preferences":{"sidebarMode":"chat"}}`
-	if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := setupClaudeDesktop(path, "/bin/evaluate", []string{"TYPESAFE_API_KEY=k"}); err != nil {
-		t.Fatal(err)
-	}
-	b, _ := os.ReadFile(path)
-	var got struct {
-		MCPServers map[string]struct {
-			Command string            `json:"command"`
-			Args    []string          `json:"args"`
-			Env     map[string]string `json:"env"`
-		} `json:"mcpServers"`
-		Preferences map[string]string `json:"preferences"`
-	}
-	if err := json.Unmarshal(b, &got); err != nil {
-		t.Fatal(err)
-	}
-	s := got.MCPServers["evaluate"]
-	if s.Command != "/bin/evaluate" || !slices.Equal(s.Args, []string{"mcp"}) || s.Env["TYPESAFE_API_KEY"] != "k" {
-		t.Fatalf("evaluate entry = %+v", s)
-	}
-	if got.MCPServers["lumi"].Command != "/bin/lumi" || got.Preferences["sidebarMode"] != "chat" {
-		t.Fatalf("other keys lost: %s", b)
-	}
-	// The pre-rename entry has to go, or the client keeps launching /gone.
-	if _, ok := got.MCPServers["jev"]; ok {
-		t.Fatalf("legacy jev entry kept: %s", b)
-	}
-
-	for _, seed := range []string{`null`, `{"mcpServers":null}`} {
-		if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if err := setupClaudeDesktop(path, "/bin/evaluate", nil); err != nil {
-			t.Fatalf("seed %s: %v", seed, err)
-		}
-	}
-}
+// TestRoute, TestSetupEnv, TestSetupCommands, and TestSetupClaudeDesktop covered
+// behaviour this fork removed: key-presence routing, bulk environment capture,
+// and setup that edits client config. Their replacements are in config_test.go
+// and setup_test.go.
 
 // A tar member named "evaluate" that is a symlink (or any other non-regular entry)
 // must not be extracted and installed over the running binary.
