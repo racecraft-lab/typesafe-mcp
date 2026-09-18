@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -74,33 +77,108 @@ func (c *Client) Evaluate(ctx context.Context, req any) ([]byte, error) {
 	// same budget, so a caller's timeout means what it says.
 	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
+	deadline, _ := ctx.Deadline()
 
 	delay := c.Backoff
 	for attempt := 0; ; attempt++ {
-		b, status, err := c.attempt(ctx, body)
+		b, status, header, err := c.attempt(ctx, body)
 		if err != nil {
 			return nil, err
 		}
 		if status/100 == 2 {
 			return b, nil
 		}
+		// Only the statuses this backend documents as transient, and only
+		// while attempts remain. Authentication, credit, validation, payload,
+		// and not-found failures would fail the same way and bill again.
 		if !slices.Contains(c.Provider.RetryStatuses, status) || attempt >= c.MaxRetries {
 			return nil, c.statusError(status, b)
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(delay):
+
+		wait := backoffFor(delay, header, time.Now())
+		// Stop rather than sleep past the deadline and then make one more
+		// doomed attempt on the way out.
+		if remaining := time.Until(deadline); wait >= remaining {
+			return nil, fmt.Errorf("%s: HTTP %d; the next retry would not fit in the %s budget; retry later",
+				c.Provider.Name, status, c.Timeout)
+		}
+		if err := sleep(ctx, wait); err != nil {
+			return nil, err
 		}
 		delay *= 2
 	}
 }
 
-// attempt makes one HTTP request and returns the body and status.
-func (c *Client) attempt(ctx context.Context, body []byte) ([]byte, int, error) {
+// sleep waits for d, or returns early if the call is cancelled.
+func sleep(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// backoffFor decides how long to wait before the next attempt.
+//
+// A valid Retry-After is a minimum, not a ceiling: waiting less than a server
+// asked for is how a client turns a rate limit into a longer one. So the wait
+// is whichever is larger, the header or the backoff.
+func backoffFor(delay time.Duration, header string, now time.Time) time.Duration {
+	wait := jitter(delay)
+	if after, ok := retryAfter(header, now); ok && after > wait {
+		return after
+	}
+	return wait
+}
+
+// jitter spreads retries over the second half of the delay window, so several
+// clients that were rate limited together do not return in lockstep.
+func jitter(delay time.Duration) time.Duration {
+	if delay <= 0 {
+		return 0
+	}
+	half := delay / 2
+	return half + time.Duration(rand.Int64N(int64(half)+1))
+}
+
+// retryAfter parses a Retry-After header in either documented form: a count of
+// seconds, or an HTTP date.
+//
+// OpenRouter's OpenAPI document declares no Retry-After header for these
+// statuses. Honouring one that arrives anyway is correct HTTP behaviour, and
+// costs nothing when it never does.
+func retryAfter(header string, now time.Time) (time.Duration, bool) {
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return 0, false
+	}
+	if secs, err := strconv.Atoi(header); err == nil {
+		if secs < 0 {
+			return 0, false
+		}
+		return time.Duration(secs) * time.Second, true
+	}
+	when, err := http.ParseTime(header)
+	if err != nil {
+		return 0, false
+	}
+	// A date already in the past means the server is ready now, which is a
+	// valid answer: it lifts no minimum, so the backoff alone applies.
+	if d := when.Sub(now); d > 0 {
+		return d, true
+	}
+	return 0, true
+}
+
+// attempt makes one HTTP request and returns the body, the status, and the
+// Retry-After header if there was one.
+func (c *Client) attempt(ctx context.Context, body []byte) ([]byte, int, string, error) {
 	r, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Provider.EndpointURL, bytes.NewReader(body))
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, "", err
 	}
 	r.Header.Set("Authorization", "Bearer "+c.APIKey.reveal())
 	r.Header.Set("Content-Type", "application/json")
@@ -114,18 +192,18 @@ func (c *Client) attempt(ctx context.Context, body []byte) ([]byte, int, error) 
 	if err != nil {
 		// Transport errors are never retried: an ambiguous failure may already
 		// have been received and billed, and replaying it would charge twice.
-		return nil, 0, fmt.Errorf("%s: %w", c.Provider.Name, err)
+		return nil, 0, "", fmt.Errorf("%s: %w", c.Provider.Name, err)
 	}
 	defer resp.Body.Close()
 
 	b, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
-		return nil, 0, fmt.Errorf("%s: reading response: %w", c.Provider.Name, err)
+		return nil, 0, "", fmt.Errorf("%s: reading response: %w", c.Provider.Name, err)
 	}
 	if len(b) > maxBody {
-		return nil, 0, fmt.Errorf("%s: response exceeds the %d byte limit", c.Provider.Name, maxBody)
+		return nil, 0, "", fmt.Errorf("%s: response exceeds the %d byte limit", c.Provider.Name, maxBody)
 	}
-	return b, resp.StatusCode, nil
+	return b, resp.StatusCode, resp.Header.Get("Retry-After"), nil
 }
 
 // statusError turns a non-2xx response into a message the agent can act on.
