@@ -148,18 +148,89 @@ is this fork's local policy and is labelled as such.
 
 ## Live tests
 
+Run 2026-09-18 against OpenRouter, with a key the owner placed in
+`~/.config/racecraft-jev/openrouter.key` themselves. The key was never typed
+into a conversation, passed as an argument, or printed.
+
 | Check | Status |
 |---|---|
-| LIVE-01: one authorized raw Decisions call | **NOT RUN** |
+| LIVE-01: one authorized raw Decisions call | **PASS** |
+| LIVE-01b: the same batch through this server | **PASS** |
+| LIVE-01c: the same batch through the launcher over real stdio | **PASS** |
 | LIVE-02: one authorized Claude Code batch | **NOT RUN** |
 | LIVE-03: one authorized Codex batch | **NOT RUN** |
 | Native Claude/Codex auth and model preserved | **NOT VERIFIED** by execution |
 
-Blocker for all four: no OpenRouter credential was supplied, and none was
-requested. The owner enters a key locally using the key-file workflow in
-[openrouter.md](openrouter.md), and separately authorizes installation and any
-billed call. No key was asked for in conversation and no policy was bypassed to
-obtain one.
+### LIVE-01: raw HTTPS call
+
+`POST https://openrouter.ai/api/alpha/decisions` with the three-primitive
+fixture, using `curl` and no project code, to establish that the contract and
+the credential work independently of this implementation.
+
+```text
+HTTP 200
+model:       typesafe/jev-1.13-20260917
+usage:       input_tokens=512 output_tokens=79 cost=2.1504e-05
+id:          gen-dec-1789741031-rPefX4WoAe6xW2Dv53wY
+provider:    TypeSafe
+answers:     customer_impact noul=0.99
+             owner choice=engineering confidence=1
+             disruption score=2 confidence=1 (+legend, +probabilities)
+```
+
+### LIVE-01b: through this server
+
+`runEvaluate` with the real resolved config, so the credential, request
+validation, transport, and response validation all took part.
+
+```text
+backend=openrouter endpoint=https://openrouter.ai/api/alpha/decisions
+model=~typesafe/jev-latest credential=file ~/.config/racecraft-jev/openrouter.key
+latency: 831ms   resolved model: typesafe/jev-1.13-20260917   cost: 2.1252e-05
+```
+
+A companion check confirmed the OpenRouter backend rejects structured
+instructions locally, naming `questions.impact.instructions`, with no request
+sent and nothing billed.
+
+### LIVE-01c: through the launcher, over real stdio
+
+The installed binary at `~/.local/libexec/racecraft-jev/evaluate`, launched by
+`bin/evaluate-launch` exactly as a plugin-installed client would, driven by a
+real MCP `CommandTransport`. `initialize`, `tools/list`, and `tools/call` all
+succeeded over the protocol.
+
+```text
+latency over stdio: 611ms
+resolved model:     typesafe/jev-1.13-20260917
+usage:              input_tokens=480 output_tokens=78 cost=2.016e-05
+```
+
+The server's instructions arrived carrying the backend note, confirming an
+agent sees which backend is configured and that only strings are accepted.
+
+### Three design decisions the live runs confirmed
+
+1. **The alias does not come back.** `~typesafe/jev-latest` resolved to
+   `typesafe/jev-1.13-20260917` every time. Code that compared the returned
+   model to the requested one would have failed.
+2. **A score is not a probability.** Every run returned `score: 2` on a
+   three-level scale. Clamping a score to 0-1, which the plan's response rules
+   warned against, would have rejected a valid answer on the first live call.
+3. **Zero is a real value.** `probabilities` came back with genuine zeros for
+   the ruled-out options. Treating them as absent would have discarded them.
+
+A `noul` answer carried no `confidence` field, as both schemas say it should
+not. No value was invented to fill it.
+
+### What is still NOT RUN, and why
+
+LIVE-02 and LIVE-03 require registering the server in the owner's real Claude
+Code and Codex configuration. That is a change to their working environment and
+has not been made. The native-authentication claim remains a design property
+visible in the diff rather than an executed check.
+
+Total spend across the three live runs: roughly **$0.00006**.
 
 The native-authentication claim is a design property, not an executed check.
 Nothing in this server reads or writes `ANTHROPIC_BASE_URL`,
@@ -168,8 +239,12 @@ state; `setup mcp` writes no file at all. That is verifiable by reading the
 diff, and `TestSetupMutatesNothing` proves the no-write part against a temporary
 home. It has not been confirmed by running both clients.
 
-**This integration is not production-verified.** It is review-ready with the
-live checks explicitly outstanding.
+**The provider integration is verified end to end**, from the resolved
+configuration through the credential, transport, and both validation passes, to
+a real answer over real stdio. **The two native clients are not.** Until
+LIVE-02 and LIVE-03 run, nothing here establishes that Claude Code and Codex
+invoke the tool correctly from their own sessions, or that attaching it leaves
+their authentication untouched in practice.
 
 ## Client installation
 
@@ -223,7 +298,7 @@ workflow is skipped.
 
 ### Outstanding release blockers
 
-1. LIVE-01, LIVE-02, and LIVE-03 have not run.
+1. ~~LIVE-01 has not run.~~ Done, three ways. LIVE-02 and LIVE-03 still have not.
 2. `RELEASE_ENABLED` and the protected `release` environment are not configured.
 3. The new pre-publication asset gate has never executed, because no release has
    been attempted. It is code that has not run.
