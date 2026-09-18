@@ -103,6 +103,20 @@ The Codex entry also sets `tool_timeout_sec: 75`, above the 45s request budget,
 so the client does not give up while the server is still inside the time it was
 given.
 
+## Codex: take the tool out of code mode
+
+Codex routes MCP tools through code mode by default, and this one does not work
+well there. Add to `~/.codex/config.toml`, adding only the line if the table
+already exists:
+
+```toml
+[features.code_mode]
+direct_only_tool_namespaces = ["mcp__jev"]
+```
+
+The namespace follows the server name in `.mcp.json`, which is `jev` here. A
+plugin cannot set this setting; it is the operator's own configuration.
+
 ## Rollback
 
 Remove the plugin with your client's plugin command. That removes the tool and

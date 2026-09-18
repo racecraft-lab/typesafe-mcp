@@ -157,9 +157,9 @@ into a conversation, passed as an argument, or printed.
 | LIVE-01: one authorized raw Decisions call | **PASS** |
 | LIVE-01b: the same batch through this server | **PASS** |
 | LIVE-01c: the same batch through the launcher over real stdio | **PASS** |
-| LIVE-02: one authorized Claude Code batch | **NOT RUN** |
-| LIVE-03: one authorized Codex batch | **NOT RUN** |
-| Native Claude/Codex auth and model preserved | **NOT VERIFIED** by execution |
+| LIVE-02: one authorized Claude Code batch | **PASS** |
+| LIVE-03: one authorized Codex batch | **PASS** |
+| Native Claude/Codex auth and model preserved | **PASS** |
 
 ### LIVE-01: raw HTTPS call
 
@@ -223,14 +223,89 @@ agent sees which backend is configured and that only strings are accepted.
 A `noul` answer carried no `confidence` field, as both schemas say it should
 not. No value was invented to fill it.
 
-### What is still NOT RUN, and why
+### LIVE-02: Claude Code
 
-LIVE-02 and LIVE-03 require registering the server in the owner's real Claude
-Code and Codex configuration. That is a change to their working environment and
-has not been made. The native-authentication claim remains a design property
-visible in the diff rather than an executed check.
+Registered at user scope as `jev-openrouter` (the name was free; `claude mcp
+list` was checked first), then driven with `claude -p` and the tool allowed.
+`claude mcp get` reported **Connected**.
 
-Total spend across the three live runs: roughly **$0.00006**.
+The client invoked the tool and returned the provider's JSON verbatim:
+
+```text
+resolved model: typesafe/jev-1.13-20260917
+usage:          input_tokens=681 output_tokens=77 cost=2.8602e-05
+answers:        customer_impact noul=0.98
+                responsible_team choice=engineering confidence=1
+                severity_level score=2 confidence=1
+```
+
+It reported unprompted that the `noul` answer carried no `confidence` and no
+`probabilities`, rather than inventing either. That is the behaviour the tool
+guidance is there to produce.
+
+### LIVE-03: Codex
+
+Registered as `jev-openrouter` and driven with `codex exec`.
+
+```text
+resolved model: typesafe/jev-1.13-20260917
+usage:          input_tokens=404 output_tokens=71 cost=1.6968e-05
+answers:        customer_impact noul=0.98
+                owner choice=engineering confidence=1
+                disruption score=2 confidence=1 (+legend)
+```
+
+Two client-side findings, neither a server defect:
+
+**Codex needs the tool taken out of code mode.** On the first attempt Codex
+emitted a well-formed call and the turn ended before the result came back, and
+it called the tool three times rather than once. Adding this server's namespace
+to `direct_only_tool_namespaces` fixed it:
+
+```toml
+[features.code_mode]
+direct_only_tool_namespaces = ["mcp__jev_openrouter"]
+```
+
+Note the underscore: Codex maps the hyphen in `jev-openrouter` to `_` in the
+tool namespace. A plugin cannot set this; it is the operator's config.
+
+**Validation was confirmed through a real client.** Before that fix, Codex sent
+a `noul` question whose criteria used `yes`/`no` keys. The server rejected it
+with `questions.customer_impacting_incident.criteria.true is required when
+criteria is given` and sent nothing to the provider. The field path was enough
+for the client to diagnose it without help.
+
+### Native authentication and model preserved
+
+Both client configurations were backed up first and compared afterwards.
+
+**Claude Code** (`~/.claude.json`): the only change under my control is one
+added key, `mcpServers["jev-openrouter"]`. No existing server was modified or
+removed. `oauthAccount`, `userID`, `primaryApiKey`, and
+`customApiKeyResponses` are byte-identical. Claude Code continued answering
+from its own Anthropic session throughout, with no new credential.
+
+**Codex** (`~/.codex/config.toml`): a semantic comparison of all keys shows
+279 after versus 272 before, with the seven additions all under
+`mcp_servers.jev-openrouter`, and **no changed values** anywhere else. Codex
+kept using its own OpenAI authentication.
+
+One incidental change to report: `codex mcp add` rewrites the whole file
+through its own TOML serializer. That reordered keys, rendered
+`startup_timeout_sec = 120` as `120.0`, and dropped one empty array,
+`mcp_servers.node_repl.args = []`. The values are equivalent and nothing else
+was lost, but it is a side effect of the client's own command, not of this
+server, and it is a reason to keep a backup before running it.
+
+### Rollback, verified available
+
+```sh
+claude mcp remove jev-openrouter --scope user
+codex mcp remove jev-openrouter
+```
+
+Total spend across all five live runs: roughly **$0.00011**.
 
 The native-authentication claim is a design property, not an executed check.
 Nothing in this server reads or writes `ANTHROPIC_BASE_URL`,
@@ -239,12 +314,14 @@ state; `setup mcp` writes no file at all. That is verifiable by reading the
 diff, and `TestSetupMutatesNothing` proves the no-write part against a temporary
 home. It has not been confirmed by running both clients.
 
-**The provider integration is verified end to end**, from the resolved
+**The integration is verified end to end on this machine**, from the resolved
 configuration through the credential, transport, and both validation passes, to
-a real answer over real stdio. **The two native clients are not.** Until
-LIVE-02 and LIVE-03 run, nothing here establishes that Claude Code and Codex
-invoke the tool correctly from their own sessions, or that attaching it leaves
-their authentication untouched in practice.
+a real answer returned inside both native clients, with their own
+authentication and models untouched.
+
+What that does **not** cover: Linux and `darwin/amd64` at runtime, the release
+pipeline, and sustained use. One successful call in each client is evidence the
+path works, not evidence it is reliable.
 
 ## Client installation
 
@@ -252,16 +329,17 @@ their authentication untouched in practice.
 |---|---|
 | `claude mcp add --help` inspected (2.1.276) | done |
 | `codex mcp add --help` inspected (0.154.0) | done |
-| Server registered in the owner's Claude Code | **NOT RUN** |
-| Server registered in the owner's Codex | **NOT RUN** |
+| Server registered in the owner's Claude Code | done, with the owner's approval |
+| Server registered in the owner's Codex | done, with the owner's approval |
 
 Both clients' help output was read to confirm the generated commands match the
 installed versions: Claude Code's `-e/--env` is variadic and its `--scope` and
 `--transport` options exist as used; Codex takes `--env KEY=VALUE` before `--`
 and the server name as a positional argument.
 
-No real client configuration was changed. The owner runs the generated commands
-when they choose to.
+The generated commands were run with the owner's explicit approval after the
+exact commands and their rollback were shown. Both configurations were backed
+up first.
 
 ## Continuous integration
 
@@ -298,7 +376,7 @@ workflow is skipped.
 
 ### Outstanding release blockers
 
-1. ~~LIVE-01 has not run.~~ Done, three ways. LIVE-02 and LIVE-03 still have not.
+1. ~~LIVE-01, LIVE-02, and LIVE-03 have not run.~~ All pass; see above.
 2. `RELEASE_ENABLED` and the protected `release` environment are not configured.
 3. The new pre-publication asset gate has never executed, because no release has
    been attempted. It is code that has not run.
