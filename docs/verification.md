@@ -4,7 +4,7 @@ What was actually run, on what, with what result. A check that did not run is
 marked `NOT RUN`, never inferred from a related one that passed.
 
 ```text
-Implementation commit:  cfa9eca (branch head at the time of writing)
+Implementation commit:  4f156b454c41af059aa61eafaac8dc842e778b7a  (PR #1 head)
 Upstream base commit:   2137d0268badd5622243424fa7993a12f3330691  (0.4.0)
 Upstream commit the plan inspected:
                         a3fe1783e3fe6a35f9823fd5c0d68ecc3d8b180b  (0.2.0)
@@ -59,7 +59,7 @@ attributable to this branch.
 | `git diff --check` | PASS |
 | `sh -n install.sh` | PASS |
 
-56 top-level tests, 42 named subtests, all passing. Every one runs offline
+57 top-level tests, 44 named subtests, all passing. Every one runs offline
 against `httptest` servers, temporary directories, and fake keys. None reads a
 real configuration directory, a real credential, or a provider endpoint.
 
@@ -68,7 +68,7 @@ real configuration directory, a real credential, or a provider endpoint.
 | `config_test.go` | 11 | CFG-01 to CFG-07, KEY-01 to KEY-05 |
 | `validation_test.go` | 13 | REQ-01 to REQ-08, RES-01 to RES-05 |
 | `client_test.go` | 12 | HTTP-01 to HTTP-10, SEC-01 |
-| `mcp_test.go` | 5 | MCP-01 to MCP-04 |
+| `mcp_test.go` | 6 | MCP-01 to MCP-04, backend-aware instructions |
 | `setup_test.go` | 7 | SET-01 to SET-04 |
 | `update_test.go` | 3 | REL-01, REL-02 |
 | `evaluate_test.go` | 5 | retained upstream regressions |
@@ -79,13 +79,13 @@ Cross-compiled with `CGO_ENABLED=0 go build -trimpath`:
 
 | Target | Built | Runtime-tested |
 |---|---|---|
-| `darwin/arm64` | PASS | **yes**, this machine |
-| `darwin/amd64` | PASS | NOT RUN (no amd64 macOS host) |
-| `linux/amd64` | PASS | NOT RUN locally; CI runs the suite on `ubuntu-latest` |
+| `darwin/arm64` | PASS | **yes**, locally and on CI `macos-latest` |
+| `darwin/amd64` | PASS | NOT RUN (no amd64 macOS host available) |
+| `linux/amd64` | PASS | **yes**, CI `ubuntu-latest` |
 | `linux/arm64` | PASS | NOT RUN |
 
-A successful cross-compile is not a runtime test. The only target exercised
-end to end on this machine is `darwin/arm64`.
+A successful cross-compile is not a runtime test. `linux/arm64` and
+`darwin/amd64` are built but never executed.
 
 ## Manual smoke checks
 
@@ -188,6 +188,23 @@ and the server name as a positional argument.
 No real client configuration was changed. The owner runs the generated commands
 when they choose to.
 
+## Continuous integration
+
+| | |
+|---|---|
+| Run | `35353510787` |
+| Result | **success** |
+| Jobs | `test (ubuntu-latest)`, `test (macos-latest)`, `cross-compile`, `fork provenance` |
+
+The first run on this PR (`35353280213`) failed one job. Both test jobs and the
+cross-compile passed; the `fork provenance` job failed on itself, because it
+greps for the upstream path and therefore contains it. Fixed in `4f156b4` by
+moving the pattern to an environment variable and excluding the workflow file,
+and the rerun is green.
+
+Worth recording as evidence that the check works: it caught a real match on its
+first execution, even though the match was its own text.
+
 ## Release readiness
 
 | Control | Status |
@@ -212,7 +229,7 @@ workflow is skipped.
    been attempted. It is code that has not run.
 4. The fork inherits a release-please manifest at `0.4.0`. The first Racecraft
    version is the maintainer's choice and has not been made.
-5. Linux and macOS CI have not run yet; the workflow lands with this PR.
+5. ~~Linux and macOS CI have not run yet.~~ Done: run `35353510787` is green on both.
 
 ## How to reproduce
 
