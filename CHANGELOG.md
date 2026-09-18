@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/racecraft-lab/typesafe-mcp/compare/v0.4.0...v0.5.0) (2026-09-18)
+
+
+### Bug Fixes
+
+* **plugin:** wire releases to the plugin manifests, add the Codex marketplace ([#5](https://github.com/racecraft-lab/typesafe-mcp/issues/5)) ([0cf4339](https://github.com/racecraft-lab/typesafe-mcp/commit/0cf4339577911899b292a60e70138f57dc38c07f))
+
+
+### Miscellaneous Chores
+
+* release 0.5.0 ([9ace23b](https://github.com/racecraft-lab/typesafe-mcp/commit/9ace23b3ea3eab1e89960697b165758434b7dd26))
+
 ## [0.4.0](https://github.com/itsmostafa/typesafe-mcp/compare/v0.3.0...v0.4.0) (2026-09-18)
 
 
