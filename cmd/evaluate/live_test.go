@@ -150,7 +150,7 @@ func TestLiveThroughLauncherOverStdio(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	cmd := exec.Command("/bin/sh", launcher)
+	cmd := exec.Command(shellPath(t), launcher)
 	cmd.Env = append(os.Environ(),
 		"EVALUATE_BIN="+installed,
 		"JEV_PROVIDER=openrouter",

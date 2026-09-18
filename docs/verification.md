@@ -307,12 +307,19 @@ codex mcp remove jev-openrouter
 
 Total spend across all five live runs: roughly **$0.00011**.
 
-The native-authentication claim is a design property, not an executed check.
-Nothing in this server reads or writes `ANTHROPIC_BASE_URL`,
+The native-authentication claim now rests on a design property *and* an
+executed check. Nothing in this server reads or writes `ANTHROPIC_BASE_URL`,
 `ANTHROPIC_AUTH_TOKEN`, Codex's `model_provider`, or either client's login
-state; `setup mcp` writes no file at all. That is verifiable by reading the
-diff, and `TestSetupMutatesNothing` proves the no-write part against a temporary
-home. It has not been confirmed by running both clients.
+state, and `setup mcp` writes no file at all; that is visible in the diff, and
+`TestSetupMutatesNothing` proves the no-write part against a temporary home.
+The configuration comparisons above confirm it in practice: after registering
+and using the server in both clients, Claude Code's auth fields were
+byte-identical and Codex's configuration had no changed values outside the new
+entry.
+
+What that still does not establish is durability. Each client made one
+successful call. That is evidence the path works, not that it keeps working
+across upgrades of either client.
 
 **The integration is verified end to end on this machine**, from the resolved
 configuration through the credential, transport, and both validation passes, to

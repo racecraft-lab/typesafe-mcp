@@ -19,6 +19,17 @@ func repoRoot(t *testing.T) string {
 	return root
 }
 
+// shellPath resolves sh from PATH rather than assuming /bin/sh, and skips the
+// test where no shell exists, so these run on more than one layout.
+func shellPath(t *testing.T) string {
+	t.Helper()
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skipf("no sh on PATH: %v", err)
+	}
+	return sh
+}
+
 func readJSON(t *testing.T, path string) map[string]any {
 	t.Helper()
 	b, err := os.ReadFile(path)
@@ -58,10 +69,18 @@ func TestPluginManifestsResolve(t *testing.T) {
 		if len(skills) == 0 {
 			t.Errorf("%s declares no skills", client)
 		}
-		for _, s := range skills {
-			dir := filepath.Join(root, filepath.Clean(s.(string)))
+		for i, entry := range skills {
+			// Checked, not asserted: a non-string entry should name the file
+			// and index that is wrong, rather than panicking somewhere in the
+			// middle of the run.
+			path, ok := entry.(string)
+			if !ok {
+				t.Errorf("%s: skills[%d] is %T, want a string", client, i, entry)
+				continue
+			}
+			dir := filepath.Join(root, filepath.Clean(path))
 			if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-				t.Errorf("%s: skills path %q does not resolve to a directory", client, s)
+				t.Errorf("%s: skills path %q does not resolve to a directory", client, path)
 			}
 		}
 
@@ -190,7 +209,7 @@ func TestLauncherResolvesTheBinary(t *testing.T) {
 	}
 
 	t.Run("missing binary reports on stderr and fails", func(t *testing.T) {
-		cmd := exec.Command("/bin/sh", launcher)
+		cmd := exec.Command(shellPath(t), launcher)
 		cmd.Env = append(os.Environ(), "EVALUATE_BIN="+filepath.Join(t.TempDir(), "absent"))
 		var stdout, stderr strings.Builder
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -217,7 +236,7 @@ func TestLauncherResolvesTheBinary(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		cmd := exec.Command("/bin/sh", launcher)
+		cmd := exec.Command(shellPath(t), launcher)
 		cmd.Env = append(os.Environ(), "EVALUATE_BIN="+fake, "HOME="+dir)
 		out, err := cmd.Output()
 		if err != nil {
@@ -238,7 +257,7 @@ func TestLauncherResolvesTheBinary(t *testing.T) {
 		if err := os.WriteFile(fake, []byte("#!/bin/sh\necho \"keyfile=$JEV_API_KEY_FILE\"\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		cmd := exec.Command("/bin/sh", launcher)
+		cmd := exec.Command(shellPath(t), launcher)
 		cmd.Env = append(os.Environ(), "EVALUATE_BIN="+fake, "HOME="+dir,
 			"JEV_API_KEY_FILE=/somewhere/else.key")
 		out, err := cmd.Output()
