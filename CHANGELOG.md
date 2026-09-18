@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0](https://github.com/racecraft-lab/typesafe-mcp/compare/v0.6.0...v0.7.0) (2026-09-18)
+
+
+### Bug Fixes
+
+* **validation:** enforce the option cap, and close the upstream parity gap ([#10](https://github.com/racecraft-lab/typesafe-mcp/issues/10)) ([0c8e8c9](https://github.com/racecraft-lab/typesafe-mcp/commit/0c8e8c9d97dc815fb78a60e9b67ac2f4bece7c3b))
+
+
+### Miscellaneous Chores
+
+* release 0.7.0 ([bc71a5c](https://github.com/racecraft-lab/typesafe-mcp/commit/bc71a5cb1a0ed4963f22c473cb4c94885d4b08c7))
+
 ## [0.6.0](https://github.com/racecraft-lab/typesafe-mcp/compare/v0.5.0...v0.6.0) (2026-09-18)
 
 
