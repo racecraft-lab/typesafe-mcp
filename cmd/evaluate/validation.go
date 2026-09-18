@@ -235,6 +235,8 @@ func validateResponse(spec ProviderSpec, in evaluateIn, body []byte) error {
 	var env struct {
 		Answers map[string]json.RawMessage `json:"answers"`
 		Error   json.RawMessage            `json:"error"`
+		Model   *string                    `json:"model"`
+		Usage   json.RawMessage            `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &env); err != nil {
 		// HTML from a proxy, or a truncated body, lands here. A 200 that is
@@ -247,6 +249,17 @@ func validateResponse(spec ProviderSpec, in evaluateIn, body []byte) error {
 	}
 	if env.Answers == nil {
 		return fmt.Errorf("%s: response has no answers object", spec.Name)
+	}
+	// Both backends document model and usage as required. Their absence means
+	// this is not a judgment envelope at all, which a truncated reply or an
+	// unrelated JSON document can otherwise impersonate. The shapes are not
+	// narrowed here, only their presence checked: usage gained an optional
+	// cost field once already, and will gain more.
+	if env.Model == nil || *env.Model == "" {
+		return fmt.Errorf("%s: response names no model", spec.Name)
+	}
+	if len(env.Usage) == 0 || string(env.Usage) == "null" {
+		return fmt.Errorf("%s: response reports no usage", spec.Name)
 	}
 
 	for _, id := range sortedKeys(in.Questions) {

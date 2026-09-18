@@ -294,6 +294,54 @@ func (v semver) newerThan(other semver) bool {
 	case other.pre == "":
 		return false
 	default:
-		return v.pre > other.pre
+		return comparePre(v.pre, other.pre) > 0
 	}
+}
+
+// comparePre orders two pre-release strings by the SemVer rules, returning a
+// negative number, zero, or a positive number.
+//
+// A plain string comparison is wrong here: it puts "rc.10" before "rc.2",
+// because "1" sorts before "2". SemVer compares dot-separated identifiers, and
+// a numeric identifier is compared as a number. It also sorts a numeric
+// identifier below an alphanumeric one, and treats a longer set of identifiers
+// as greater when every earlier one is equal.
+func comparePre(a, b string) int {
+	ai := strings.Split(a, ".")
+	bi := strings.Split(b, ".")
+	for i := 0; i < len(ai) && i < len(bi); i++ {
+		if c := comparePreIdentifier(ai[i], bi[i]); c != 0 {
+			return c
+		}
+	}
+	return len(ai) - len(bi)
+}
+
+func comparePreIdentifier(a, b string) int {
+	an, aNum := preNumber(a)
+	bn, bNum := preNumber(b)
+	switch {
+	case aNum && bNum:
+		return an - bn
+	case aNum:
+		// Numeric identifiers always have lower precedence.
+		return -1
+	case bNum:
+		return 1
+	default:
+		return strings.Compare(a, b)
+	}
+}
+
+// preNumber reports whether s is a numeric identifier, and its value. Leading
+// zeros are not valid in a numeric identifier, so "01" is compared as text.
+func preNumber(s string) (int, bool) {
+	if s == "" || (len(s) > 1 && s[0] == '0') {
+		return 0, false
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0, false
+	}
+	return n, true
 }

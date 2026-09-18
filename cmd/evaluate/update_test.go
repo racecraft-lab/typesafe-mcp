@@ -69,3 +69,41 @@ func TestDevelopmentBuildsHaveNoVersion(t *testing.T) {
 		}
 	}
 }
+
+// A pre-release is compared by SemVer's rules, not as a string. Plain string
+// comparison puts "rc.10" before "rc.2", because "1" sorts before "2", which
+// would refuse a real upgrade.
+func TestPreReleaseOrdering(t *testing.T) {
+	for _, tc := range []struct {
+		later, earlier string
+	}{
+		{"v1.0.0-rc.10", "v1.0.0-rc.2"},
+		{"v1.0.0-rc.2", "v1.0.0-rc.1"},
+		{"v1.0.0-beta.11", "v1.0.0-beta.2"},
+		// Numeric identifiers sort below alphanumeric ones.
+		{"v1.0.0-alpha.beta", "v1.0.0-alpha.1"},
+		// A longer identifier set wins when the shared prefix is equal.
+		{"v1.0.0-alpha.1", "v1.0.0-alpha"},
+		// The SemVer specification's own example chain.
+		{"v1.0.0-alpha.beta", "v1.0.0-alpha.1"},
+		{"v1.0.0-beta", "v1.0.0-alpha.beta"},
+		{"v1.0.0-beta.2", "v1.0.0-beta"},
+		{"v1.0.0-rc.1", "v1.0.0-beta.11"},
+		{"v1.0.0", "v1.0.0-rc.1"},
+	} {
+		later, err := parseVersion(tc.later)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.later, err)
+		}
+		earlier, err := parseVersion(tc.earlier)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.earlier, err)
+		}
+		if !later.newerThan(earlier) {
+			t.Errorf("%s should be newer than %s", tc.later, tc.earlier)
+		}
+		if earlier.newerThan(later) {
+			t.Errorf("%s should not be newer than %s", tc.earlier, tc.later)
+		}
+	}
+}

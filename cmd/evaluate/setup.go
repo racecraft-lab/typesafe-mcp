@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -58,6 +60,12 @@ func newMCPSetupCmd() *cobra.Command {
 			"configuration file, or read your API key. Review the output, then run it yourself.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Refused rather than ignored. Accepting --dry-run=false and then
+			// printing anyway would tell an operator their configuration had
+			// been applied when nothing was written.
+			if !dryRun {
+				return fmt.Errorf("--dry-run=false is not supported: this command only ever prints configuration; run the printed commands yourself")
+			}
 			cfg, err := resolveConfig(os.LookupEnv)
 			if err != nil {
 				return err
@@ -115,7 +123,7 @@ func runMCPSetup(out io.Writer, cfg Config, exe string, opts setupOptions) error
 		case "claude-code":
 			fmt.Fprint(out, claudeCodeSnippet(name, exe, env))
 		case "codex":
-			fmt.Fprint(out, codexSnippet(name, exe, env))
+			fmt.Fprint(out, codexSnippet(name, exe, env, cfg.Timeout))
 		}
 		fmt.Fprintln(out)
 	}
@@ -216,7 +224,7 @@ func claudeCodeSnippet(name, exe string, env []envPair) string {
 	return b.String()
 }
 
-func codexSnippet(name, exe string, env []envPair) string {
+func codexSnippet(name, exe string, env []envPair, timeout time.Duration) string {
 	var b strings.Builder
 	b.WriteString("## Codex\n\n")
 	b.WriteString("codex mcp list   # `codex mcp add` overwrites an existing entry of the same name\n\n")
@@ -232,12 +240,29 @@ func codexSnippet(name, exe string, env []envPair) string {
 	b.WriteString("command = " + tomlString(exe) + "\n")
 	b.WriteString("args = [\"mcp\"]\n")
 	b.WriteString("startup_timeout_sec = 10\n")
-	b.WriteString("tool_timeout_sec = 75\n\n")
+	fmt.Fprintf(&b, "tool_timeout_sec = %d\n\n", codexToolTimeout(timeout))
 	b.WriteString("[mcp_servers." + name + ".env]\n")
 	for _, p := range env {
 		b.WriteString(p.key + " = " + tomlString(p.value) + "\n")
 	}
 	return b.String()
+}
+
+// codexToolTimeout returns the tool_timeout_sec to generate for a given
+// request budget.
+//
+// A fixed 75 was wrong: JEV_REQUEST_TIMEOUT accepts up to five minutes, and a
+// client that gives up at 75s while the server is still inside the budget it
+// was handed turns a slow answer into a failed one. The margin covers process
+// startup and the final response write, so the client is always the last to
+// give up rather than the first.
+func codexToolTimeout(timeout time.Duration) int {
+	const marginSeconds = 30
+	seconds := int(math.Ceil(timeout.Seconds()))
+	if seconds < 1 {
+		seconds = 1
+	}
+	return seconds + marginSeconds
 }
 
 // credentialNote explains where the key comes from, without printing one.

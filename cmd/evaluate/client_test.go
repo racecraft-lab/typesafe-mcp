@@ -19,7 +19,7 @@ func simpleIn() evaluateIn {
 	}
 }
 
-const noulReply = `{"model":"m","answers":{"q":{"type":"noul","noul":0.9}}}`
+const noulReply = `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{"q":{"type":"noul","noul":0.9}}}`
 
 // HTTP-05: statuses that will fail the same way next time are not retried. A
 // replay of a 402 or a 401 only wastes the deadline; a replay of a 400 can

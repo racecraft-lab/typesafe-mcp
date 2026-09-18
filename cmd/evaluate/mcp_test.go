@@ -260,7 +260,7 @@ func TestStdioHelperProcess(t *testing.T) {
 // MCP-03, MCP-04: over real stdio, the child speaks protocol on stdout and
 // nothing else, and shuts down cleanly when the transport closes.
 func TestStdioTransportRoundTrip(t *testing.T) {
-	srv := mockBackend(t, `{"model":"m","answers":{"q":{"type":"noul","noul":0.42}}}`)
+	srv := mockBackend(t, `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{"q":{"type":"noul","noul":0.42}}}`)
 	ctx := context.Background()
 
 	cmd := exec.Command(os.Args[0], "-test.run=TestStdioHelperProcess")

@@ -249,3 +249,47 @@ func TestSetupCarriesTunedSettings(t *testing.T) {
 		}
 	}
 }
+
+// The generated Codex tool timeout has to exceed the server's own request
+// budget. A fixed 75 seconds was wrong: JEV_REQUEST_TIMEOUT accepts up to five
+// minutes, and a client that gives up first turns a slow answer into a failure.
+func TestCodexToolTimeoutExceedsRequestBudget(t *testing.T) {
+	for _, timeout := range []time.Duration{
+		time.Second, 45 * time.Second, 90 * time.Second, maxTimeout,
+	} {
+		got := codexToolTimeout(timeout)
+		if float64(got) <= timeout.Seconds() {
+			t.Errorf("timeout %s: tool_timeout_sec %d does not exceed it", timeout, got)
+		}
+	}
+
+	// And it reaches the generated snippet rather than being hard-coded.
+	cfg, err := resolveConfig(envLookup(map[string]string{
+		"JEV_PROVIDER":        "openrouter",
+		"JEV_REQUEST_TIMEOUT": "5m",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := generate(t, cfg, "/opt/racecraft/evaluate", setupOptions{clients: []string{"codex"}})
+	if !strings.Contains(got, "tool_timeout_sec = 330") {
+		t.Errorf("a 5m budget should generate tool_timeout_sec = 330:\n%s", got)
+	}
+	if strings.Contains(got, "tool_timeout_sec = 75") {
+		t.Error("tool_timeout_sec is still hard-coded at 75")
+	}
+}
+
+// --dry-run=false is refused rather than ignored. Accepting it and printing
+// anyway would tell an operator their configuration had been applied.
+func TestSetupRefusesDryRunFalse(t *testing.T) {
+	cmd := newMCPSetupCmd()
+	cmd.SetArgs([]string{"--client", "claude-code", "--dry-run=false"})
+	var out strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatalf("--dry-run=false was accepted; output:\n%s", out.String())
+	}
+}

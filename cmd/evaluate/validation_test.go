@@ -128,7 +128,7 @@ func TestLocalRejectionMakesNoRequest(t *testing.T) {
 	var calls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
-		w.Write([]byte(`{"model":"m","answers":{}}`))
+		w.Write([]byte(`{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{}}`))
 	}))
 	defer srv.Close()
 
@@ -197,7 +197,7 @@ func TestScoreCriteriaOrderIsPreserved(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
 			t.Error(err)
 		}
-		w.Write([]byte(`{"model":"m","answers":{"disruption":{"type":"score","score":1.3}}}`))
+		w.Write([]byte(`{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{"disruption":{"type":"score","score":1.3}}}`))
 	}))
 	defer srv.Close()
 
@@ -235,7 +235,7 @@ func TestRequestIsDecisionsNotChat(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
 		}
-		w.Write([]byte(`{"model":"m","answers":{"q":{"type":"noul","noul":0.9}}}`))
+		w.Write([]byte(`{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{"q":{"type":"noul","noul":0.9}}}`))
 	}))
 	defer srv.Close()
 
@@ -277,7 +277,7 @@ func TestAttributionIsOpenRouterOnly(t *testing.T) {
 	var referer, title string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		referer, title = r.Header.Get("HTTP-Referer"), r.Header.Get("X-OpenRouter-Title")
-		w.Write([]byte(`{"model":"m","answers":{"q":{"type":"noul","noul":0.5}}}`))
+		w.Write([]byte(`{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{"q":{"type":"noul","noul":0.5}}}`))
 	}))
 	defer srv.Close()
 
@@ -305,11 +305,11 @@ func TestResponseRejectsNonJudgments(t *testing.T) {
 		"invalid json":  `{"answers":`,
 		"error object":  `{"error":{"code":402,"message":"Insufficient credits"}}`,
 		"no answers":    `{"model":"m","usage":{"input_tokens":1,"output_tokens":1}}`,
-		"null answers":  `{"model":"m","answers":null}`,
-		"missing id":    `{"model":"m","answers":{"other":{"type":"noul","noul":0.5}}}`,
-		"wrong type":    `{"model":"m","answers":{"q":{"type":"choice","choice":"a"}}}`,
-		"no value":      `{"model":"m","answers":{"q":{"type":"noul"}}}`,
-		"noul over one": `{"model":"m","answers":{"q":{"type":"noul","noul":1.4}}}`,
+		"null answers":  `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":null}`,
+		"missing id":    `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{"other":{"type":"noul","noul":0.5}}}`,
+		"wrong type":    `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{"q":{"type":"choice","choice":"a"}}}`,
+		"no value":      `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{"q":{"type":"noul"}}}`,
+		"noul over one": `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{"q":{"type":"noul","noul":1.4}}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := validateResponse(openrouterSpec, in, []byte(body)); err == nil {
@@ -356,7 +356,7 @@ func TestOptionalConfidenceMayBeAbsent(t *testing.T) {
 		},
 	}
 	// No confidence, no probabilities, no legend anywhere.
-	bare := `{"model":"m","answers":{
+	bare := `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{
 		"owner":{"type":"choice","choice":"engineering"},
 		"disruption":{"type":"score","score":1.7}}}`
 	if err := validateResponse(openrouterSpec, in, []byte(bare)); err != nil {
@@ -378,7 +378,7 @@ func TestZeroValuesAndScoreRangeSurvive(t *testing.T) {
 		},
 	}
 	// score 2.0 is the top level of a three-level scale, well outside 0-1.
-	valid := `{"model":"m","answers":{
+	valid := `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{
 		"owner":{"type":"choice","choice":"engineering","confidence":0,"probabilities":{"engineering":1,"billing":0}},
 		"disruption":{"type":"score","score":2,"confidence":0.9}}}`
 	if err := validateResponse(openrouterSpec, in, []byte(valid)); err != nil {
@@ -386,7 +386,7 @@ func TestZeroValuesAndScoreRangeSurvive(t *testing.T) {
 	}
 
 	// Above the top level number is out of range for this scale.
-	tooHigh := `{"model":"m","answers":{
+	tooHigh := `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{
 		"owner":{"type":"choice","choice":"engineering"},
 		"disruption":{"type":"score","score":3.1}}}`
 	if err := validateResponse(openrouterSpec, in, []byte(tooHigh)); err == nil {
@@ -403,8 +403,39 @@ func TestChoiceOutsideCriteriaIsRejected(t *testing.T) {
 			"owner": {Type: "choice", Instructions: "i", Criteria: map[string]any{"engineering": "e", "billing": "b"}},
 		},
 	}
-	body := `{"model":"m","answers":{"owner":{"type":"choice","choice":"legal"}}}`
+	body := `{"model":"m","usage":{"input_tokens":12,"output_tokens":5},"answers":{"owner":{"type":"choice","choice":"legal"}}}`
 	if err := validateResponse(openrouterSpec, in, []byte(body)); err == nil {
 		t.Error("accepted an option that was never offered")
+	}
+}
+
+// Both backends document model and usage as required. Their absence means this
+// is not a judgment envelope, which a truncated reply or an unrelated JSON
+// document can otherwise impersonate.
+func TestResponseRequiresModelAndUsage(t *testing.T) {
+	in := evaluateIn{
+		State:     "x",
+		Questions: map[string]question{"q": {Type: "noul", Instructions: "i"}},
+	}
+	const answer = `"answers":{"q":{"type":"noul","noul":0.5}}`
+
+	for name, body := range map[string]string{
+		"no model":    `{` + answer + `,"usage":{"input_tokens":1,"output_tokens":1}}`,
+		"empty model": `{"model":"",` + answer + `,"usage":{"input_tokens":1,"output_tokens":1}}`,
+		"no usage":    `{"model":"m",` + answer + `}`,
+		"null usage":  `{"model":"m","usage":null,` + answer + `}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateResponse(openrouterSpec, in, []byte(body)); err == nil {
+				t.Errorf("accepted a response with %s", name)
+			}
+		})
+	}
+
+	// The shapes are not narrowed, only their presence checked: usage gained an
+	// optional cost field once already and will gain more.
+	full := `{"model":"m","usage":{"input_tokens":1,"output_tokens":1,"cost":0.1,"future":true},` + answer + `}`
+	if err := validateResponse(openrouterSpec, in, []byte(full)); err != nil {
+		t.Errorf("rejected a valid response with an extended usage block: %v", err)
 	}
 }
