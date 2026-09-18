@@ -309,3 +309,57 @@ func TestStdioTransportRoundTrip(t *testing.T) {
 		t.Errorf("closing the stdio session: %v", err)
 	}
 }
+
+// The server's instructions are what both clients read before the agent writes
+// a question. They must say which backend is configured, that a call costs
+// money, and, for OpenRouter, that structured instructions are rejected there.
+//
+// This last point is what keeps the official TypeSafe agent skill usable
+// alongside this server: the skill teaches the structured form, which is
+// correct for the direct API and rejected by OpenRouter.
+func TestServerInstructionsNameTheBackend(t *testing.T) {
+	for _, tc := range []struct {
+		provider string
+		wantAll  []string
+		wantNone []string
+	}{
+		{
+			provider: "openrouter",
+			wantAll: []string{
+				"Backend: openrouter",
+				"bills for the call",
+				"accepts only strings",
+				"rejected here",
+			},
+		},
+		{
+			provider: "typesafe",
+			wantAll:  []string{"Backend: typesafe", "bills for the call"},
+			// The direct API does accept structure, so the warning must not
+			// leak onto this backend and talk agents out of using it.
+			wantNone: []string{"accepts only strings", "rejected here"},
+		},
+	} {
+		t.Run(tc.provider, func(t *testing.T) {
+			srv := mockBackend(t, noulReply)
+			cfg, c := backendFor(t, tc.provider, srv)
+			session := connect(t, cfg, c)
+
+			got := session.InitializeResult().Instructions
+			for _, want := range tc.wantAll {
+				if !strings.Contains(got, want) {
+					t.Errorf("instructions missing %q:\n%s", want, got)
+				}
+			}
+			for _, unwanted := range tc.wantNone {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("instructions wrongly contain %q:\n%s", unwanted, got)
+				}
+			}
+			// Upstream's question-design guidance must survive either way.
+			if !strings.Contains(got, "A noul near 0.5 means uncertain") {
+				t.Errorf("base guidance lost:\n%s", got)
+			}
+		})
+	}
+}

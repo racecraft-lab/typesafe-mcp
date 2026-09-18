@@ -153,10 +153,28 @@ func newClient(cfg Config) (*Client, error) {
 func newServer(cfg Config, c *Client) *mcp.Server {
 	s := mcp.NewServer(
 		&mcp.Implementation{Name: "evaluate", Version: version},
-		&mcp.ServerOptions{Instructions: instructions},
+		&mcp.ServerOptions{Instructions: instructions + backendNote(cfg)},
 	)
 	registerTools(s, cfg, c)
 	return s
+}
+
+// backendNote appends what differs about the configured backend.
+//
+// TypeSafe's own documentation, and the TypeSafe agent skill built from it,
+// teach structured instructions and criteria. That is correct for the direct
+// API and wrong for OpenRouter, whose Decisions schema types those fields as
+// strings. Saying so up front turns a rejected call into one that is never
+// written that way.
+func backendNote(cfg Config) string {
+	note := "\nBackend: " + cfg.Provider.Name + ". Calling this tool sends the state and questions" +
+		" you pass to that provider, which bills for the call."
+	if cfg.Provider.Name == "openrouter" {
+		note += "\nThis backend accepts only strings for instructions and for every criteria" +
+			" description. Structured objects or arrays, and null option descriptions, are" +
+			" supported by the TypeSafe backend and rejected here."
+	}
+	return note
 }
 
 func serve(ctx context.Context) error {
