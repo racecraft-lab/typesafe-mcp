@@ -574,8 +574,32 @@ func TestSkillsSurviveInstallWithoutTheServer(t *testing.T) {
 		"make the judgment yourself",       // with an instruction that works
 	} {
 		if !strings.Contains(string(skill), want) {
-			t.Errorf("SKILL.md does not handle the no-server install: missing %q", want)
+			t.Errorf("typed-judgments does not handle the no-server install: missing %q", want)
 		}
+	}
+
+	// Both skills name the tool, so both have to survive its absence. The
+	// vendored one said "this plugin ships an MCP server" and "call evaluate"
+	// with no condition, which under skills add routes an agent to a tool that
+	// is not there. Only the Racecraft-added section may change, which is
+	// where the condition belongs.
+	vendored, err := os.ReadFile(filepath.Join(root, "plugin", "shared-skills", "typesafe-ai", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"skills add",          // the install that has no server
+		"when it is there",    // the call is conditional
+		"no such tool exists", // and the absent case is handled
+		"in the ordinary way", // with an instruction that works
+	} {
+		if !strings.Contains(string(vendored), want) {
+			t.Errorf("typesafe-ai routes to evaluate unconditionally: missing %q", want)
+		}
+	}
+	// The unconditional instruction must be gone, not merely qualified later.
+	if strings.Contains(string(vendored), "**Call `evaluate`.**") {
+		t.Error("typesafe-ai still says to call evaluate unconditionally")
 	}
 }
 

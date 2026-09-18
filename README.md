@@ -56,9 +56,10 @@ skills add racecraft-lab/typesafe-mcp --skill typed-judgments
 ```
 
 **That path carries the skills only.** There is no MCP server and so no
-`evaluate` tool, which leaves `typed-judgments` with nothing to route to; it
-says as much when it is read. What still works is `typesafe-ai`, which is about
-building a TypeSafe integration in your own code and needs no tool at all. For
+`evaluate` tool. Both skills mention that tool, so both say to check it exists
+before relying on it and to make the judgment normally when it does not. What
+they are still worth installing for is the part that needs no tool: designing
+the questions, and building a TypeSafe integration in your own code. For
 judgments inside a session, install the plugin instead.
 
 The by-hand path below registers the same server with no plugin involved. Use
