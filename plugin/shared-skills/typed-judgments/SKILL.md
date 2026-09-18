@@ -57,6 +57,35 @@ Use it **before** asserting the judgment, not to confirm one already given.
   level 2 with some weight on 3. That fraction is the signal; do not round it
   away.
 
+## Learning to ask a better question
+
+The rules below are the short version. TypeSafe publishes the long one, and it
+is live rather than bundled here, so it stays current as the model does. Read a
+page when the judgment in front of you is hard to frame, not routinely.
+
+Mintlify serves Markdown by appending `.md` to a page path. Resolve relative
+links against `https://docs.typesafe.ai`, and read targeted pages rather than
+the whole site.
+
+| When you are stuck on | Read |
+| --- | --- |
+| Which primitive fits, or asking several at once | [Primitives](https://docs.typesafe.ai/primitives.md) |
+| Writing the options, levels or criteria | [Choice](https://docs.typesafe.ai/primitives/choice.md), [Score](https://docs.typesafe.ai/primitives/score.md), [Noul](https://docs.typesafe.ai/primitives/noul.md) |
+| What to put in `state` and how to shape it | [State](https://docs.typesafe.ai/concepts/state.md) |
+| An answer whose confidence is low, or what to do about it | [Confidence](https://docs.typesafe.ai/confidence.md), [Confidence-gated routing](https://docs.typesafe.ai/patterns/confidence-routing.md) |
+| A judgment too big for one question | [Composite scoring](https://docs.typesafe.ai/patterns/composite-scoring.md), [Speculative fan-out](https://docs.typesafe.ai/patterns/fan-out.md) |
+| Anything else | the [documentation index](https://docs.typesafe.ai/llms.txt) |
+
+Two cautions specific to using the tool rather than writing code. The
+[advanced structure](https://docs.typesafe.ai/primitives/advanced.md) page
+describes JSON structure in instructions and criteria, which the `typesafe`
+backend accepts and the OpenRouter one does not; see the strings rule below.
+And the SDK pages describe an integration you would write, which is a different
+job from the one this skill is for.
+
+If the docs cannot be fetched, say so and work from what is here rather than
+inventing a detail that depends on a version you cannot see.
+
 ## Rules that decide whether the answer is useful
 
 **Batch.** Independent questions over the same state go in one call. They run
