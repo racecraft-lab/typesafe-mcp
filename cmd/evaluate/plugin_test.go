@@ -405,9 +405,19 @@ func skillFrontmatter(t *testing.T, path string) map[string]string {
 	// and one folded block, and the fields under test are known.
 	fields := map[string]string{}
 	key := ""
-	for _, line := range strings.Split(body[4:4+end], "\n") {
+	for i, line := range strings.Split(body[4:4+end], "\n") {
 		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
-			fields[key] += " " + strings.TrimSpace(line)
+			// A continuation before any key means the frontmatter is
+			// malformed. Folding it into fields[""] would accept the file and
+			// then fail somewhere less obvious, such as a description that
+			// measures zero characters.
+			if key == "" {
+				t.Fatalf("%s: line %d is indented but continues no key: %q", path, i+2, line)
+			}
+			if fields[key] != "" {
+				fields[key] += " "
+			}
+			fields[key] += strings.TrimSpace(line)
 			continue
 		}
 		name, value, ok := strings.Cut(line, ":")
