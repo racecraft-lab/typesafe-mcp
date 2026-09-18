@@ -14,7 +14,7 @@ server by hand with no plugin involved. Both paths run the same binary. Use one.
 | `.claude-plugin/plugin.json` | Claude Code manifest |
 | `.claude-plugin/marketplace.json` | marketplace entry, source `./` |
 | `.codex-plugin/plugin.json` | Codex manifest |
-| `.agents/plugins/marketplace.json` | marketplace entry Codex reads, source `./` |
+| `.agents/plugins/marketplace.json` | marketplace entry Codex prefers, source `./` |
 | `mcp/claude.json` | MCP entry for Claude Code |
 | `.mcp.json` | MCP entry for Codex |
 | `shared-skills/typesafe-ai/` | TypeSafe's skill, adapted, with its MIT licence |
@@ -81,6 +81,13 @@ codex plugin add typesafe-jev@racecraft-typesafe
 Restart the client afterwards. Both commands track `main`. To pin, append
 `@<tag>` to the Claude source or pass `--ref <tag>` to Codex; no release tag
 exists for this fork yet.
+
+Codex reads `.agents/plugins/marketplace.json` when it is present and falls back
+to `.claude-plugin/marketplace.json` when it is not, so it could install this
+plugin before the Codex marketplace file existed. `codex plugin list` prints the
+file it chose. The Codex file is still worth keeping: it is where the display
+name, category and installation policy Codex shows belong, and the fallback is
+behaviour rather than a documented contract.
 
 Claude Code and Codex both change these commands from time to time. Check
 `claude plugin --help` and `codex plugin --help` if either is rejected.
