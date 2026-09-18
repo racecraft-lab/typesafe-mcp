@@ -293,18 +293,24 @@ func TestCodexMarketplaceResolves(t *testing.T) {
 		t.Errorf("marketplace name differs: codex=%v claude=%v", doc["name"], claudeMarket["name"])
 	}
 
-	plugins, _ := doc["plugins"].([]any)
-	if len(plugins) != 1 {
-		t.Fatalf("want exactly one plugin, got %d", len(plugins))
-	}
-	entry, _ := plugins[0].(map[string]any)
-	if entry == nil {
-		t.Fatal("plugins[0] is not an object")
+	// Found by name rather than by position: the entry this test is about is
+	// the one named in the Codex manifest, whatever order the file lists them.
+	manifest := readJSON(t, filepath.Join(root, ".codex-plugin/plugin.json"))
+	name, _ := manifest["name"].(string)
+	if name == "" {
+		t.Fatal("the Codex manifest declares no name")
 	}
 
-	manifest := readJSON(t, filepath.Join(root, ".codex-plugin/plugin.json"))
-	if entry["name"] != manifest["name"] {
-		t.Errorf("marketplace names %v, the Codex manifest names %v", entry["name"], manifest["name"])
+	plugins, _ := doc["plugins"].([]any)
+	var entry map[string]any
+	for _, p := range plugins {
+		candidate, _ := p.(map[string]any)
+		if candidate != nil && candidate["name"] == name {
+			entry = candidate
+		}
+	}
+	if entry == nil {
+		t.Fatalf("the Codex marketplace has no entry named %q", name)
 	}
 
 	// The source is an object for Codex, unlike Claude Code's bare string.
