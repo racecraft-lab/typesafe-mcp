@@ -304,13 +304,17 @@ func TestEnvironmentKeyErrorsNeverQuoteTheValue(t *testing.T) {
 		"placeholder":         "${" + sentinel + "}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			t.Setenv("OPENROUTER_API_KEY", value)
-			cfg, err := resolveConfig(os.LookupEnv)
+			// envLookup, not os.LookupEnv: resolveConfig's contract is that a
+			// test never reads the developer's shell. The value still has to
+			// reach os.LookupEnv inside loadCredential, so it is also set in
+			// the process environment, scoped to this subtest.
+			cfg, err := resolveConfig(envLookup(map[string]string{
+				"JEV_PROVIDER": "openrouter",
+			}))
 			if err != nil {
 				t.Fatal(err)
 			}
-			cfg.Provider = providers["openrouter"]
-			cfg.KeyFile = ""
+			t.Setenv(cfg.Provider.APIKeyEnv, value)
 
 			_, err = loadCredential(cfg)
 			if err == nil {
