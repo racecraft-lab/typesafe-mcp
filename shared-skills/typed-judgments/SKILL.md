@@ -11,6 +11,10 @@ description: >
   to read the numbers. Do NOT use for writing code or prose, for a lookup or
   search, or for any question whose possible answers cannot be listed up front.
 license: MIT
+metadata:
+  author: Racecraft Lab
+  version: 0.6.0 # x-release-please-version
+  mcp-server: jev
 ---
 
 # Typed judgments with Jev
@@ -121,7 +125,20 @@ anything you pass.
 
 ## If the tool is not there
 
-The plugin ships a launcher, not the binary. If `evaluate` is missing, the
-server reports where it looked; see the plugin's README for the one-time
-install. Do not write an SDK integration as a substitute for an in-session
-judgment.
+Check which of two situations you are in before doing anything else.
+
+**No `evaluate` tool exists at all.** This skill was installed on its own, most
+likely through `skills add`, which carries skill files and no MCP server. There
+is nothing to route to. Say so once, make the judgment yourself in the ordinary
+way, and do not offer to build an integration to stand in for it. If typed
+judgments are wanted in a session, the plugin is what provides them:
+`racecraft-lab/typesafe-mcp`.
+
+**The tool exists but fails.** The plugin ships a launcher, not the binary, so
+the usual cause is that the binary was never installed. The server reports the
+path it looked at and the command that installs it; pass that on rather than
+working around it.
+
+In neither case is writing SDK or HTTP code a substitute for an in-session
+judgment. That is what the `typesafe-ai` skill is for, and it is a different
+job: building an integration into someone's software.

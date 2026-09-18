@@ -42,6 +42,25 @@ codex plugin add typesafe-jev@racecraft-typesafe
 The binary is installed separately either way, by step 1 of the quickstart
 below. The plugin carries a launcher, not four platform builds.
 
+In Claude Code you can also invoke either skill by name:
+`/typesafe-jev:typed-judgments` and `/typesafe-jev:typesafe-ai`.
+
+### Other agents, via skills.sh
+
+Both skills install into twenty-odd other agents with no plugin involved, the
+same way upstream distributes its own:
+
+```sh
+skills add racecraft-lab/typesafe-mcp          # run through npx
+skills add racecraft-lab/typesafe-mcp --skill typed-judgments
+```
+
+**That path carries the skills only.** There is no MCP server and so no
+`evaluate` tool, which leaves `typed-judgments` with nothing to route to; it
+says as much when it is read. What still works is `typesafe-ai`, which is about
+building a TypeSafe integration in your own code and needs no tool at all. For
+judgments inside a session, install the plugin instead.
+
 The by-hand path below registers the same server with no plugin involved. Use
 one or the other.
 

@@ -532,3 +532,74 @@ func TestJudgmentSkillNamesItsTriggers(t *testing.T) {
 		}
 	}
 }
+
+// The skills install without the plugin, through skills.sh, which carries
+// skill files and no MCP server. That path is real (upstream distributes the
+// same way and it resolves this repository's shared-skills/ directory), so the
+// README has to name it, and the judgment skill has to say what to do when the
+// tool it routes to does not exist. A skill that keeps recommending a tool
+// nobody has is worse than one that admits it.
+func TestSkillsSurviveInstallWithoutTheServer(t *testing.T) {
+	root := repoRoot(t)
+
+	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"skills add racecraft-lab/typesafe-mcp", // the command
+		"no MCP server",                         // and its one real limitation
+	} {
+		if !strings.Contains(string(readme), want) {
+			t.Errorf("README does not document %q", want)
+		}
+	}
+
+	skill, err := os.ReadFile(filepath.Join(root, "shared-skills", "typed-judgments", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"No `evaluate` tool exists at all", // the case is named
+		"skills add",                       // and attributed to the right cause
+		"make the judgment yourself",       // with an instruction that works
+	} {
+		if !strings.Contains(string(skill), want) {
+			t.Errorf("SKILL.md does not handle the no-server install: missing %q", want)
+		}
+	}
+}
+
+// The skill's own metadata states a version, so it has to be bumped with
+// everything else. A generic extra-file entry is how release-please reaches a
+// Markdown file, keyed off the x-release-please-version annotation beside the
+// value.
+func TestSkillVersionIsBumpedByRelease(t *testing.T) {
+	root := repoRoot(t)
+	const skillPath = "shared-skills/typed-judgments/SKILL.md"
+
+	b, err := os.ReadFile(filepath.Join(root, skillPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	released, _ := readJSON(t, filepath.Join(root, ".release-please-manifest.json"))["."].(string)
+	if released == "" {
+		t.Fatal("the release manifest states no version")
+	}
+	want := "version: " + released + " # x-release-please-version"
+	if !strings.Contains(string(b), want) {
+		t.Errorf("SKILL.md metadata does not carry %q", want)
+	}
+
+	cfg := readJSON(t, filepath.Join(root, "release-please-config.json"))
+	packages, _ := cfg["packages"].(map[string]any)
+	pkg, _ := packages["."].(map[string]any)
+	extra, _ := pkg["extra-files"].([]any)
+	for _, e := range extra {
+		entry, _ := e.(map[string]any)
+		if entry != nil && entry["path"] == skillPath {
+			return
+		}
+	}
+	t.Errorf("release-please does not bump %s", skillPath)
+}
