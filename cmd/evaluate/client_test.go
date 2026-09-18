@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -25,9 +26,9 @@ const noulReply = `{"model":"m","answers":{"q":{"type":"noul","noul":0.9}}}`
 // still be billed.
 func TestNoRetryOnTerminalStatuses(t *testing.T) {
 	for _, status := range []int{400, 401, 402, 403, 404, 413, 422} {
-		calls := 0
+		var calls atomic.Int64
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			calls++
+			calls.Add(1)
 			w.WriteHeader(status)
 			w.Write([]byte(`{"error":{"code":` + itoa(status) + `,"message":"nope"}}`))
 		}))
@@ -39,8 +40,8 @@ func TestNoRetryOnTerminalStatuses(t *testing.T) {
 		if err == nil {
 			t.Errorf("%d: want an error", status)
 		}
-		if calls != 1 {
-			t.Errorf("%d: made %d attempts, want 1", status, calls)
+		if calls.Load() != 1 {
+			t.Errorf("%d: made %d attempts, want 1", status, calls.Load())
 		}
 		if err != nil && strings.Contains(err.Error(), "nope") {
 			t.Errorf("%d: echoed the provider's message: %v", status, err)
@@ -66,10 +67,10 @@ func TestRetryPolicyIsPerBackend(t *testing.T) {
 		{"openrouter", 500, 1},
 		{"openrouter", 502, 1},
 	} {
-		calls := 0
+		var calls atomic.Int64
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			calls++
-			if calls == 1 {
+			calls.Add(1)
+			if calls.Load() == 1 {
 				w.WriteHeader(tc.status)
 				return
 			}
@@ -80,8 +81,8 @@ func TestRetryPolicyIsPerBackend(t *testing.T) {
 		_, err := c.Evaluate(context.Background(), simpleIn())
 		srv.Close()
 
-		if calls != tc.wantCalls {
-			t.Errorf("%s %d: made %d attempts, want %d", tc.provider, tc.status, calls, tc.wantCalls)
+		if calls.Load() != int64(tc.wantCalls) {
+			t.Errorf("%s %d: made %d attempts, want %d", tc.provider, tc.status, calls.Load(), tc.wantCalls)
 		}
 		if tc.wantCalls > 1 && err != nil {
 			t.Errorf("%s %d: %v", tc.provider, tc.status, err)
@@ -92,9 +93,9 @@ func TestRetryPolicyIsPerBackend(t *testing.T) {
 // JEV_MAX_RETRIES=0 means one attempt, and the default of 3 means at most four.
 func TestAttemptCountIsBounded(t *testing.T) {
 	for retries, want := range map[int]int{0: 1, 1: 2, 3: 4} {
-		calls := 0
+		var calls atomic.Int64
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			calls++
+			calls.Add(1)
 			w.WriteHeader(http.StatusTooManyRequests)
 		}))
 
@@ -105,8 +106,8 @@ func TestAttemptCountIsBounded(t *testing.T) {
 		}
 		srv.Close()
 
-		if calls != want {
-			t.Errorf("retries=%d: made %d attempts, want %d", retries, calls, want)
+		if calls.Load() != int64(want) {
+			t.Errorf("retries=%d: made %d attempts, want %d", retries, calls.Load(), want)
 		}
 	}
 }
@@ -160,9 +161,9 @@ func TestRetryAfterIsAMinimumNotACeiling(t *testing.T) {
 // there instead of sleeping past the deadline and making one more doomed
 // attempt on the way out.
 func TestRetryStopsWhenWaitExceedsDeadline(t *testing.T) {
-	calls := 0
+	var calls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
+		calls.Add(1)
 		w.Header().Set("Retry-After", "600")
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
@@ -181,8 +182,8 @@ func TestRetryStopsWhenWaitExceedsDeadline(t *testing.T) {
 	if !strings.Contains(err.Error(), "retry later") {
 		t.Errorf("error should say the budget is spent: %v", err)
 	}
-	if calls != 1 {
-		t.Errorf("made %d attempts, want 1", calls)
+	if calls.Load() != 1 {
+		t.Errorf("made %d attempts, want 1", calls.Load())
 	}
 	if elapsed > time.Second {
 		t.Errorf("waited %v before giving up; it should not sleep at all", elapsed)
@@ -192,12 +193,12 @@ func TestRetryStopsWhenWaitExceedsDeadline(t *testing.T) {
 // HTTP-03: a redirect on an authenticated request is refused, so neither the
 // credential nor the state reaches a host that is not the configured endpoint.
 func TestRedirectIsRefused(t *testing.T) {
-	var secondHostSawAuth, secondHostSawBody bool
+	var secondHostSawAuth, secondHostSawBody atomic.Bool
 	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		secondHostSawAuth = r.Header.Get("Authorization") != ""
+		secondHostSawAuth.Store(r.Header.Get("Authorization") != "")
 		buf := make([]byte, 1)
 		n, _ := r.Body.Read(buf)
-		secondHostSawBody = n > 0
+		secondHostSawBody.Store(n > 0)
 		w.Write([]byte(noulReply))
 	}))
 	defer second.Close()
@@ -218,8 +219,8 @@ func TestRedirectIsRefused(t *testing.T) {
 	if !strings.Contains(err.Error(), "refusing redirect") {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if secondHostSawAuth || secondHostSawBody {
-		t.Errorf("redirect target received auth=%v body=%v", secondHostSawAuth, secondHostSawBody)
+	if secondHostSawAuth.Load() || secondHostSawBody.Load() {
+		t.Errorf("redirect target received auth=%v body=%v", secondHostSawAuth.Load(), secondHostSawBody.Load())
 	}
 }
 
@@ -248,9 +249,9 @@ func TestOversizedResponseIsRejected(t *testing.T) {
 
 // HTTP-09: a cancelled call returns promptly and makes no further request.
 func TestCancellationStopsRetries(t *testing.T) {
-	calls := 0
+	var calls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
+		calls.Add(1)
 		w.Header().Set("Retry-After", "2")
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
@@ -273,17 +274,17 @@ func TestCancellationStopsRetries(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Errorf("took %v to notice cancellation", elapsed)
 	}
-	if calls != 1 {
-		t.Errorf("made %d attempts after cancellation, want 1", calls)
+	if calls.Load() != 1 {
+		t.Errorf("made %d attempts after cancellation, want 1", calls.Load())
 	}
 }
 
 // HTTP-10: a transport failure is ambiguous. The request may have been
 // received and billed, so it is reported rather than blindly replayed.
 func TestTransportFailureIsNotReplayed(t *testing.T) {
-	calls := 0
+	var calls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
+		calls.Add(1)
 		// Hijack and close without a response: the client sees a broken
 		// connection, not a status it could classify.
 		hj, ok := w.(http.Hijacker)
@@ -304,8 +305,8 @@ func TestTransportFailureIsNotReplayed(t *testing.T) {
 	if _, err := c.Evaluate(context.Background(), simpleIn()); err == nil {
 		t.Fatal("want a transport error")
 	}
-	if calls != 1 {
-		t.Errorf("replayed an ambiguous failure: %d attempts", calls)
+	if calls.Load() != 1 {
+		t.Errorf("replayed an ambiguous failure: %d attempts", calls.Load())
 	}
 }
 
@@ -342,9 +343,9 @@ func TestFailuresLeakNeitherKeyNorState(t *testing.T) {
 
 // A request larger than the local cap is refused before it is sent.
 func TestOversizedRequestIsRefusedLocally(t *testing.T) {
-	calls := 0
+	var calls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
+		calls.Add(1)
 		w.Write([]byte(noulReply))
 	}))
 	defer srv.Close()
@@ -356,8 +357,8 @@ func TestOversizedRequestIsRefusedLocally(t *testing.T) {
 	if _, err := c.Evaluate(context.Background(), in); err == nil {
 		t.Fatal("sent an oversized request")
 	}
-	if calls != 0 {
-		t.Errorf("made %d requests for an oversized body", calls)
+	if calls.Load() != 0 {
+		t.Errorf("made %d requests for an oversized body", calls.Load())
 	}
 }
 

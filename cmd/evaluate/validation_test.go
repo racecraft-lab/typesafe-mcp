@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -124,9 +125,9 @@ func TestNullChoiceDescriptionIsBackendSpecific(t *testing.T) {
 // REQ-03, REQ-05: a locally rejected request costs nothing, so the provider
 // must never be contacted.
 func TestLocalRejectionMakesNoRequest(t *testing.T) {
-	calls := 0
+	var calls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
+		calls.Add(1)
 		w.Write([]byte(`{"model":"m","answers":{}}`))
 	}))
 	defer srv.Close()
@@ -139,8 +140,8 @@ func TestLocalRejectionMakesNoRequest(t *testing.T) {
 	if err == nil {
 		t.Fatal("want a validation error")
 	}
-	if calls != 0 {
-		t.Fatalf("made %d HTTP requests for a locally invalid call", calls)
+	if calls.Load() != 0 {
+		t.Fatalf("made %d HTTP requests for a locally invalid call", calls.Load())
 	}
 }
 
