@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/racecraft-lab/typesafe-mcp/compare/v0.5.0...v0.6.0) (2026-09-18)
+
+
+### Features
+
+* **plugin:** add the typed-judgments skill and a proactive eval suite ([#8](https://github.com/racecraft-lab/typesafe-mcp/issues/8)) ([4bab4dc](https://github.com/racecraft-lab/typesafe-mcp/commit/4bab4dc9185d498b9f6ba28d13a254a53d66fdc5))
+
+
+### Bug Fixes
+
+* **auth:** make the key-rejection reasons provably value-free ([#7](https://github.com/racecraft-lab/typesafe-mcp/issues/7)) ([0a999e8](https://github.com/racecraft-lab/typesafe-mcp/commit/0a999e870bf94b0bee4ca795e2c6c2421a52493e))
+
 ## [0.5.0](https://github.com/racecraft-lab/typesafe-mcp/compare/v0.4.0...v0.5.0) (2026-09-18)
 
 First release of Racecraft Lab's fork of [itsmostafa/typesafe-mcp](https://github.com/itsmostafa/typesafe-mcp). The fork's substance landed in [#1](https://github.com/racecraft-lab/typesafe-mcp/pull/1), [#2](https://github.com/racecraft-lab/typesafe-mcp/pull/2) and [#3](https://github.com/racecraft-lab/typesafe-mcp/pull/3), which squash-merged with non-conventional subjects, so this section is written by hand rather than generated from them.
