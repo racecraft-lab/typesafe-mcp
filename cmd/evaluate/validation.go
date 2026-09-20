@@ -16,7 +16,7 @@ import (
 // option descriptions.
 //
 // So structure is no longer narrowed for OpenRouter. What remains of the
-// divergence is null in the three positions this server requires a value in
+// divergence is null in the three positions this server requires a value
 // anyway (instructions, noul true/false, score levels), which is why no
 // per-backend null rule survives here either. The capability still lives on
 // ProviderSpec rather than being assumed, so a backend that re-narrows is one

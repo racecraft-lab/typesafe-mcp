@@ -74,7 +74,7 @@ object, or array, and additionally allow `null` for choice option descriptions.
 | noul `criteria.true` / `.false` | string, object, array, null | string, object, array; when `criteria` is present both keys are required (no null) |
 
 All that survives of the divergence is `null` in the three positions this server
-requires a value in anyway, so no per-backend rule is left in the validator. The
+requires a value anyway, so no per-backend rule is left in the validator. The
 capability is still carried on `ProviderSpec.StructuredEntries` rather than
 assumed, so a backend that re-narrows is one field to flip.
 
