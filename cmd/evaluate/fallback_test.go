@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -157,6 +158,32 @@ func TestShapeRejectionNeverSwitches(t *testing.T) {
 func TestUnreachablePrimarySwitches(t *testing.T) {
 	c, primary, fallback, _ := withFallback(t, http.StatusOK)
 	primary.srv.Close()
+	if _, err := runEvaluate(context.Background(), c, simpleIn()); err != nil {
+		t.Fatal(err)
+	}
+	if fallback.calls.Load() != 1 {
+		t.Errorf("fallback calls = %d, want 1", fallback.calls.Load())
+	}
+}
+
+// FB-05b: a primary that resets the connection while its answer is being
+// read never answered either, so it switches too.
+func TestResetMidResponseSwitches(t *testing.T) {
+	c, primary, fallback, _ := withFallback(t, http.StatusOK)
+	primary.srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"model":`))
+		w.(http.Flusher).Flush()
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		// Linger 0 makes the close a reset rather than a clean end of stream.
+		conn.(*net.TCPConn).SetLinger(0)
+		conn.Close()
+	})
 	if _, err := runEvaluate(context.Background(), c, simpleIn()); err != nil {
 		t.Fatal(err)
 	}

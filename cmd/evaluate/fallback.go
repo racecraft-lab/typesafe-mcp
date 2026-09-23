@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 )
@@ -38,8 +39,11 @@ func fallbackReason(err error) (string, bool) {
 	if errors.As(err, &status) {
 		return fmt.Sprintf("HTTP %d", status.Status), fallbackStatus(status.Status)
 	}
+	// A request that never got an answer: refused or dropped before a response
+	// (*url.Error), or reset while the response was being read (net.Error).
 	var transport *url.Error
-	if errors.As(err, &transport) {
+	var network net.Error
+	if errors.As(err, &transport) || errors.As(err, &network) {
 		return "unreachable", true
 	}
 	return "", false
