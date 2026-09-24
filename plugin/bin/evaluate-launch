@@ -23,10 +23,17 @@ evaluate: no server binary at $BIN
 This plugin moved. Install it from its new marketplace, then remove this copy
 so the client does not run two jev servers:
 
+  # Claude Code
   claude plugin marketplace add racecraft-lab/racecraft-plugins-public --scope user
   claude plugin install typesafe-jev@racecraft-plugins-public --scope user
   claude plugin uninstall typesafe-jev@racecraft-typesafe
   claude plugin marketplace remove racecraft-typesafe
+
+  # Codex
+  codex plugin marketplace add racecraft-lab/racecraft-plugins-public
+  codex plugin add typesafe-jev@racecraft-plugins-public
+  codex plugin remove typesafe-jev@racecraft-typesafe
+  codex plugin marketplace remove racecraft-typesafe
 
 Its README says how to install the binary. To keep this copy instead, install
 the binary once, then reconnect this MCP server:
