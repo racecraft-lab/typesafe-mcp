@@ -12,11 +12,31 @@ set -eu
 
 BIN="${EVALUATE_BIN:-$HOME/.local/libexec/racecraft-jev/evaluate}"
 
+# This plugin moved. The line lands in the client's MCP log, which is where an
+# operator looks when the server misbehaves.
+echo "evaluate: this plugin moved to the racecraft-plugins-public marketplace; install typesafe-jev@racecraft-plugins-public and remove this copy" >&2
+
 if [ ! -x "$BIN" ]; then
 	cat >&2 <<EOF
 evaluate: no server binary at $BIN
 
-Install it once, then reconnect this MCP server:
+This plugin moved. Install it from its new marketplace, then remove this copy
+so the client does not run two jev servers:
+
+  # Claude Code
+  claude plugin marketplace add racecraft-lab/racecraft-plugins-public --scope user
+  claude plugin install typesafe-jev@racecraft-plugins-public --scope user
+  claude plugin uninstall typesafe-jev@racecraft-typesafe
+  claude plugin marketplace remove racecraft-typesafe
+
+  # Codex
+  codex plugin marketplace add racecraft-lab/racecraft-plugins-public
+  codex plugin add typesafe-jev@racecraft-plugins-public
+  codex plugin remove typesafe-jev@racecraft-typesafe
+  codex plugin marketplace remove racecraft-typesafe
+
+Its README says how to install the binary. To keep this copy instead, install
+the binary once, then reconnect this MCP server:
 
   # from a release
   curl -fsSL -o install.sh \\

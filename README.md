@@ -1,5 +1,41 @@
 # Typesafe MCP (Racecraft Lab fork)
 
+> [!IMPORTANT]
+> **This repository has moved and is archived.** `evaluate` and its plugin now
+> live in [racecraft-lab/racecraft-plugins-public](https://github.com/racecraft-lab/racecraft-plugins-public/tree/main/typesafe-jev)
+> as `typesafe-jev`, released there under `typesafe-jev-vX.Y.Z` tags. New
+> releases, fixes, and issues go there. v0.8.1 is this repository's last
+> release, and it exists only to hand installs over.
+>
+> **Plugin users:** install from the new marketplace, then remove this copy, or
+> the client runs two `jev` servers. The binary path and the key files do not
+> change.
+>
+> ```sh
+> # Claude Code
+> claude plugin marketplace add racecraft-lab/racecraft-plugins-public --scope user
+> claude plugin install typesafe-jev@racecraft-plugins-public --scope user
+> claude plugin uninstall typesafe-jev@racecraft-typesafe
+> claude plugin marketplace remove racecraft-typesafe
+>
+> # Codex
+> codex plugin marketplace add racecraft-lab/racecraft-plugins-public
+> codex plugin add typesafe-jev@racecraft-plugins-public
+> codex plugin remove typesafe-jev@racecraft-typesafe
+> codex plugin marketplace remove racecraft-typesafe
+> ```
+>
+> **Binary users:** run `evaluate update`. From any earlier release of this fork
+> (v0.5.0 to v0.8.0) it installs v0.8.1, whose own `evaluate update` then
+> installs the newest `typesafe-jev` release from the new repository, checked
+> against that release's `SHA256SUMS.txt`. So run it twice:
+>
+> ```sh
+> ~/.local/libexec/racecraft-jev/evaluate update   # v0.5.0 to v0.8.0 → v0.8.1
+> ~/.local/libexec/racecraft-jev/evaluate update   # v0.8.1 → newest typesafe-jev
+> ~/.local/libexec/racecraft-jev/evaluate version --verbose
+> ```
+
 **Give your AI agent typed evaluations instead of free text.** `evaluate` is an MCP server that lets Claude Code, Codex, and [pi](https://pi.dev) call [TypeSafe](https://typesafe.ai)'s Jev model and get back probabilities they can branch on.
 
 This is Racecraft Lab's fork of [itsmostafa/typesafe-mcp](https://github.com/itsmostafa/typesafe-mcp). It adds explicit backend selection, a private key-file workflow, per-backend request validation, and a setup command that generates configuration instead of applying it. [docs/upstream-baseline.md](docs/upstream-baseline.md) records every difference and why.
@@ -29,14 +65,17 @@ The plugin bundles the `evaluate` tool together with TypeSafe's agent skill,
 adapted to use it: see [docs/plugin.md](docs/plugin.md). Install it **instead
 of** the official `typesafe` plugin, not alongside it.
 
+The plugin is now listed in the Racecraft plugin marketplace. Install it from
+there:
+
 ```sh
 # Claude Code
-claude plugin marketplace add racecraft-lab/typesafe-mcp --scope user
-claude plugin install typesafe-jev@racecraft-typesafe --scope user
+claude plugin marketplace add racecraft-lab/racecraft-plugins-public --scope user
+claude plugin install typesafe-jev@racecraft-plugins-public --scope user
 
 # Codex
-codex plugin marketplace add racecraft-lab/typesafe-mcp
-codex plugin add typesafe-jev@racecraft-typesafe
+codex plugin marketplace add racecraft-lab/racecraft-plugins-public
+codex plugin add typesafe-jev@racecraft-plugins-public
 ```
 
 The binary is installed separately either way, by step 1 of the quickstart
@@ -77,7 +116,7 @@ curl -fsSL -o install.sh \
 sh install.sh
 ```
 
-It installs to `~/.local/libexec/racecraft-jev/evaluate`, deliberately **not** on your `PATH`, so it cannot collide with an upstream `evaluate` you may already have. Point clients at that absolute path. Building from source works too, into the same directory:
+It installs this repository's last release, then runs its `evaluate update`, which moves it to the newest `typesafe-jev` release from racecraft-lab/racecraft-plugins-public. It installs to `~/.local/libexec/racecraft-jev/evaluate`, deliberately **not** on your `PATH`, so it cannot collide with an upstream `evaluate` you may already have. Point clients at that absolute path. Building from source works too, into the same directory:
 
 ```sh
 task install

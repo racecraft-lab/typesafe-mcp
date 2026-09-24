@@ -1,5 +1,11 @@
 # Installing as a plugin
 
+> [!IMPORTANT]
+> The plugin moved to the [racecraft-plugins-public](https://github.com/racecraft-lab/racecraft-plugins-public/tree/main/typesafe-jev)
+> marketplace as `typesafe-jev@racecraft-plugins-public`. The commands below
+> install this repository's last copy. See the [README](../README.md) for the
+> commands that install the new one and remove this one.
+
 This repository is also a plugin for Claude Code and Codex. Installing it gives
 a client both halves at once: the `evaluate` MCP tool, and TypeSafe's agent
 skill adapted to use it.

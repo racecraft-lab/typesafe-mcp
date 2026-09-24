@@ -94,15 +94,21 @@ func newVersionCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
 			out := cmd.OutOrStdout()
+			// Stderr, because the release pipeline compares stdout with the
+			// tag. An operator arriving here from 0.8.0 has taken the first
+			// of two hops; this line names the second.
+			fmt.Fprintf(cmd.ErrOrStderr(), "evaluate: this project moved to %s; run `evaluate update` again to install the newest typesafe-jev release from there.\n", githubRepo)
 			if !verbose {
 				fmt.Fprintln(out, version)
 				return
 			}
 			// Which build this is and where it came from, so an operator can
 			// tell a Racecraft install from an upstream one without a network
-			// call or a credential.
+			// call or a credential. This build came from sourceRepo, and
+			// `evaluate update` now reads githubRepo.
 			fmt.Fprintln(out, "version:   ", version)
-			fmt.Fprintln(out, "repository:", githubRepo)
+			fmt.Fprintln(out, "repository:", sourceRepo)
+			fmt.Fprintln(out, "updates:   ", githubRepo, "(typesafe-jev-v* releases)")
 			fmt.Fprintln(out, "commit:    ", buildCommit())
 		},
 	}
