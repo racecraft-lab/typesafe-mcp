@@ -248,6 +248,10 @@ func TestLauncherResolvesTheBinary(t *testing.T) {
 		if !strings.Contains(stderr.String(), "install.sh") {
 			t.Errorf("stderr should say how to install: %q", stderr.String())
 		}
+		// The plugin moved: the message names the new marketplace entry.
+		if !strings.Contains(stderr.String(), "typesafe-jev@racecraft-plugins-public") {
+			t.Errorf("stderr should name the new marketplace: %q", stderr.String())
+		}
 	})
 
 	t.Run("present binary is exec'd with the key-file default", func(t *testing.T) {

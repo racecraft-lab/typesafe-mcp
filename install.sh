@@ -11,6 +11,15 @@
 # This is Racecraft Lab's fork. It installs into its own directory rather than
 # ~/.local/bin, so it cannot overwrite an upstream `evaluate` already on PATH,
 # and it never replaces an existing file unless EVALUATE_FORCE=1.
+#
+# This repository has moved. evaluate now lives in
+# racecraft-lab/racecraft-plugins-public as typesafe-jev, which releases more
+# than one component, so its "latest" release can belong to another one. This
+# script therefore installs this repository's last release, the bridge, and
+# then runs that binary's `evaluate update`: it lists the new repository's
+# releases, picks the newest typesafe-jev-v* tag, and checks it against that
+# release's SHA256SUMS.txt. Parsing the release list here in sh would be a
+# second copy of that logic.
 set -eu
 
 REPO="racecraft-lab/typesafe-mcp"
@@ -72,6 +81,14 @@ main() {
 	mv "$staged" "$target"
 
 	echo "Installed to $target"
+
+	echo "Moving to the newest typesafe-jev release from racecraft-lab/racecraft-plugins-public..."
+	if ! "$target" update; then
+		echo "evaluate update failed; $target still holds this repository's last release." >&2
+		echo "Re-run it with: $target update" >&2
+		exit 1
+	fi
+
 	# Deliberately not added to PATH: an isolated absolute path cannot shadow,
 	# or be shadowed by, another evaluate install. Point clients at it directly.
 	echo "Register it with: $target setup mcp --client claude-code --client codex" >&2
