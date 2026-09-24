@@ -25,13 +25,13 @@
 > codex plugin marketplace remove racecraft-typesafe
 > ```
 >
-> **Binary users:** run `evaluate update`. From v0.8.0 or earlier it installs
-> v0.8.1, whose own `evaluate update` then installs the newest `typesafe-jev`
-> release from the new repository, checked against that release's
-> `SHA256SUMS.txt`. So from v0.8.0, run it twice:
+> **Binary users:** run `evaluate update`. From any earlier release of this fork
+> (v0.5.0 to v0.8.0) it installs v0.8.1, whose own `evaluate update` then
+> installs the newest `typesafe-jev` release from the new repository, checked
+> against that release's `SHA256SUMS.txt`. So run it twice:
 >
 > ```sh
-> ~/.local/libexec/racecraft-jev/evaluate update   # v0.8.0 → v0.8.1
+> ~/.local/libexec/racecraft-jev/evaluate update   # v0.5.0 to v0.8.0 → v0.8.1
 > ~/.local/libexec/racecraft-jev/evaluate update   # v0.8.1 → newest typesafe-jev
 > ~/.local/libexec/racecraft-jev/evaluate version --verbose
 > ```
