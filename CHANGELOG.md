@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/racecraft-lab/typesafe-mcp/compare/v0.8.0...v0.8.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* **update:** hand installs over to racecraft-plugins-public ([#16](https://github.com/racecraft-lab/typesafe-mcp/issues/16)) ([71b8ac3](https://github.com/racecraft-lab/typesafe-mcp/commit/71b8ac3be6618a658e6eb852e8908c94f7425277))
+
 ## [0.8.0](https://github.com/racecraft-lab/typesafe-mcp/compare/v0.7.1...v0.8.0) (2026-09-23)
 
 
